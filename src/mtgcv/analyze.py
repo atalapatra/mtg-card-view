@@ -16,6 +16,7 @@ SECTION_ORDER = ["commander", "companion", "main", "sideboard", "maybeboard"]
 COLOR_NAMES = {"W": "White", "U": "Blue", "B": "Black", "R": "Red", "G": "Green"}
 
 GroupBy = Literal["category", "primary", "type", "cmc", "color", "section", "user_tag", "none"]
+GROUP_MODES: list[str] = ["category", "primary", "type", "cmc", "color", "section", "user_tag", "none"]
 SortBy = Literal["edhrec", "name", "cmc", "price"]
 
 
@@ -31,6 +32,7 @@ class CardInfo:
     cmc: float = 0.0
     type_line: str = ""
     main_type: str = "Other"
+    layout: str = ""  # Scryfall layout: normal, split, transform, modal_dfc, adventure, ...
     oracle_text: str = ""
     power: str | None = None
     toughness: str | None = None
@@ -41,6 +43,7 @@ class CardInfo:
     rarity: str = ""
     set_code: str = ""
     set_name: str = ""
+    collector_number: str = ""
     edhrec_rank: int | None = None
     game_changer: bool = False
     commander_legal: bool | None = None
@@ -57,8 +60,13 @@ class CardInfo:
     primary_category: str = UNCATEGORIZED
     user_tags: list[str] = field(default_factory=list)
 
+    @property
+    def key(self) -> str:
+        """Stable identifier within a deck (same card can be in main and sideboard)."""
+        return f"{self.section}:{self.name}"
+
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {"key": self.key, **asdict(self)}
 
 
 @dataclass
@@ -84,7 +92,7 @@ class Report:
         return {
             "summary": summarize(self.cards),
             "cards": [c.to_dict() for c in sort_cards(self.cards, sort_by)],
-            "groups": [{"name": g.name, "count": g.count, "cards": [c.name for c in g.cards]}
+            "groups": [{"name": g.name, "count": g.count, "cards": [c.key for c in g.cards]}
                        for g in groups],
             "group_by": group_by,
             "sort_by": sort_by,
@@ -92,6 +100,20 @@ class Report:
             "parse_errors": [{"line": n, "text": t} for n, t in self.parse_errors],
             "tag_descriptions": {t: d for t, d in self.tag_descriptions.items() if t in used_tags},
         }
+
+    def to_api_dict(self) -> dict:
+        """Everything a UI needs to switch grouping/sorting client-side without refetching:
+        cards, plus group membership (card keys) for every built-in grouping mode."""
+        data = self.to_dict("category", "name")
+        data.pop("groups")
+        data.pop("group_by")
+        data.pop("sort_by")
+        data["groupings"] = {
+            mode: [{"name": g.name, "cards": [c.key for c in g.cards]}
+                   for g in group_cards(self.cards, mode, "name")]
+            for mode in GROUP_MODES
+        }
+        return data
 
 
 # --- building ------------------------------------------------------------------
@@ -144,6 +166,7 @@ def card_info(entry: DeckEntry, card: dict | None, tags: TagIndex) -> CardInfo:
         cmc=float(card.get("cmc") or 0),
         type_line=card.get("type_line", ""),
         main_type=_main_type(card.get("type_line", "")),
+        layout=card.get("layout", ""),
         oracle_text=_face_field(card, "oracle_text", "\n//\n"),
         power=card.get("power", faces[0].get("power")),
         toughness=card.get("toughness", faces[0].get("toughness")),
@@ -154,6 +177,7 @@ def card_info(entry: DeckEntry, card: dict | None, tags: TagIndex) -> CardInfo:
         rarity=card.get("rarity", ""),
         set_code=card.get("set", ""),
         set_name=card.get("set_name", ""),
+        collector_number=card.get("collector_number", ""),
         edhrec_rank=card.get("edhrec_rank"),
         game_changer=bool(card.get("game_changer")),
         commander_legal=None if legal is None else legal == "legal",

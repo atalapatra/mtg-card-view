@@ -77,10 +77,46 @@ Status: `Accepted`, `Proposed` (awaiting user), `Superseded by D-NNN`.
 - Rationale: Keep the core light until the UI/API decision is made. Revisit if a FastAPI layer is added
   (pydantic would come along with it).
 
-## D-009 · 2026-11-16 · Proposed
+## D-009 · 2026-11-16 · Superseded by D-010
 **UI stack** (awaiting the user's decision)
 
 - Options presented: (A) React + Vite with a FastAPI server, *recommended* for dnd-kit drag and drop;
   (B) Svelte with FastAPI; (C) a Python-only UI (NiceGUI or Streamlit), weak at drag and drop; (D) a Tauri desktop wrapper around A.
 - Related open decisions: layout (board columns, table, or image grid), where custom groupings are saved
   (browser only or backend SQLite), and deck input (paste, upload, or Moxfield/Archidekt URL import).
+
+## D-010 · 2026-11-16 · Accepted
+**UI stack: React + Vite (TypeScript) frontend, FastAPI backend** (chosen by the user: option A)
+
+- Frontend in `web/`: React 19, Vite 8, TypeScript 5.9 (pinned `~5.9`, not the native TS 7 compiler),
+  `@dnd-kit/core` for drag and drop, plain CSS with variables (no CSS framework).
+- Backend in `src/mtgcv/server.py`, run with `mtgcv serve`. In dev, Vite (:5173) proxies `/api` to :8000.
+  In prod, FastAPI serves the built `web/dist`.
+- Consequences: one command runs the whole app once the frontend is built. FastAPI and uvicorn are now core
+  dependencies (this supersedes the "httpx only" part of D-008).
+
+## D-011 · 2026-11-16 · Accepted
+**Layout: switchable Board / Table / Images views** (chosen by the user)
+
+- Board (masonry-style columns per group) was built first and is the only view with drag and drop. Table and
+  Images use the same grouping, sorting, and filtering.
+- The API returns group membership for every built-in grouping mode in one response
+  (`Report.to_api_dict()["groupings"]`), so switching grouping or view is instant and grouping logic
+  exists only in Python. Sorting and text filtering happen client-side.
+
+## D-012 · 2026-11-16 · Accepted
+**Persistence: decks and custom groupings in backend SQLite** (chosen by the user)
+
+- `src/mtgcv/store.py`: `decks.sqlite3` in a *data* dir (`%APPDATA%\mtg-card-view`, override
+  `MTGCV_DATA_DIR`), kept separate from the cache dir so clearing the cache never loses user work.
+- A custom grouping is a "board": `{groups: [{id, name, cards: [card keys]}]}`. Card key = `"<section>:<name>"`.
+  Boards are **single-placement**: the server dedupes on save, and cards not in any group show as Unsorted.
+  Boards can be seeded from primary category, type, mana value, color, section, or user tags, or start empty.
+- Reports are not stored. They're recomputed on load from the card cache (fast), so they stay fresh.
+- The UI saves board edits optimistically, with a 400 ms debounced PATCH.
+
+## D-013 · 2026-11-16 · Accepted
+**Deck input: paste text only** (chosen by the user)
+
+- A paste dialog with the same parser as the CLI. File upload and Moxfield/Archidekt URL import were
+  offered and not chosen.

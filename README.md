@@ -12,7 +12,23 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
-## Usage
+## Web UI
+
+```powershell
+cd web; npm install; npm run build; cd ..   # one-time: build the frontend
+mtgcv serve --open                          # http://127.0.0.1:8000
+```
+
+- Paste a deck list with **+ New deck**. Decks are saved in `%APPDATA%\mtg-card-view\decks.sqlite3`.
+- Switch between **Board**, **Table**, and **Images** views. Group by category, type, mana value, color, and more. Sort by EDHREC rank, name, MV, or price.
+  Filter by name, rules text, or tag.
+- Choose **Group by → + New custom grouping…** to make your own groups, then drag cards between them in the Board view.
+  Changes save automatically.
+- Click a card to see its details: EDHREC rank, categories, and every Scryfall tag (★ marks cards Tagger considers defining examples of a tag).
+
+For frontend development, run `mtgcv serve` and `cd web; npm run dev` (http://localhost:5173, hot reload).
+
+## CLI
 
 ```powershell
 mtgcv analyze examples\sample_deck.txt                  # grouped by category, sorted by EDHREC rank
@@ -58,6 +74,10 @@ src/mtgcv/
   categories.py  tag -> category mapping
   analyze.py     CardInfo model, grouping, sorting, summary
   cli.py         command-line interface
+  store.py       saved decks + custom groupings (SQLite)
+  server.py      FastAPI app
+web/             React + Vite + TypeScript UI
+docs/            decisions log, status, Scryfall API notes
 ```
 
 ## Tests

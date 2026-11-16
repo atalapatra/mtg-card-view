@@ -116,6 +116,13 @@ def cmd_refresh_tags(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    from mtgcv.server import run
+
+    run(host=args.host, port=args.port, open_browser=args.open, reload=args.reload)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # card names / mana symbols on Windows consoles
@@ -138,6 +145,13 @@ def main(argv: list[str] | None = None) -> int:
 
     r = sub.add_parser("refresh-tags", help="Force re-download of Scryfall oracle tags")
     r.set_defaults(func=cmd_refresh_tags)
+
+    s = sub.add_parser("serve", help="Run the web UI / API server")
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=8000)
+    s.add_argument("--open", action="store_true", help="Open the UI in a browser")
+    s.add_argument("--reload", action="store_true", help="Auto-reload on code changes (dev)")
+    s.set_defaults(func=cmd_serve)
 
     args = p.parse_args(argv)
     return args.func(args)

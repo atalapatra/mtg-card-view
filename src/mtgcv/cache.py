@@ -31,7 +31,8 @@ class CardCache:
         self.dir = cache_dir or default_cache_dir()
         self.dir.mkdir(parents=True, exist_ok=True)
         self.ttl = ttl
-        self._db = sqlite3.connect(self.dir / "cards.sqlite3")
+        # The web server calls this from worker threads; callers serialize access with a lock.
+        self._db = sqlite3.connect(self.dir / "cards.sqlite3", check_same_thread=False)
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS cards ("
             " key TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at REAL NOT NULL)"

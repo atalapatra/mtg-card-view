@@ -9,9 +9,10 @@ and card details. The goal is to understand what each card does in a deck and ho
 Group cards by category and sort by EDHREC rank. The end goal is a UI where cards can be
 dragged and dropped into custom groupings.
 
-- Backend/core: Python 3.13 package `mtgcv` in `src/mtgcv/` (done, see `docs/status.md`)
-- Frontend: not built yet. It doesn't have to be Python. **The user wants to review options and make the UI design decisions
-  themselves.** Present choices; don't pick a framework unilaterally.
+- Backend/core: Python 3.13 package `mtgcv` in `src/mtgcv/`, plus a FastAPI server
+- Frontend: React + Vite + TypeScript in `web/` (D-010 to D-013 in the decisions log)
+- **The user wants to make UI and design decisions themselves.** For new UX choices, present options with a
+  recommendation and ask. Don't pick unilaterally.
 
 ## Docs: read and update these
 
@@ -29,7 +30,14 @@ dragged and dropped into custom groupings.
 .\.venv\Scripts\mtgcv analyze deck.txt --json out.json    # JSON report (UI contract)
 .\.venv\Scripts\mtgcv card "Sol Ring"                     # inspect one card's tags
 .\.venv\Scripts\python -m pip install -e ".[dev]"         # (re)install
+.\.venv\Scripts\mtgcv serve --open                        # app at :8000 (serves web/dist if built)
+
+cd web; npm install; npm run build                        # build UI (tsc typecheck + vite)
+cd web; npm run dev                                       # UI dev server :5173, proxies /api -> :8000
 ```
+
+When testing the server manually, set `$env:MTGCV_DATA_DIR` to a scratch folder so you don't write
+into the user's real saved decks.
 
 ## Architecture
 
@@ -40,10 +48,20 @@ cache.py       SQLite card cache (7-day TTL) + tags bulk file (daily update chec
 categories.py  CATEGORIES: ordered list mapping tag slugs -> ~30 deck roles; order = primary priority
 analyze.py     CardInfo dataclass, build_report, group_cards, sort_cards, summarize
 cli.py         argparse CLI (`mtgcv` entry point)
+store.py       DeckStore: SQLite decks + boards (custom groupings) in the data dir
+server.py      FastAPI app (create_app) — /api/decks, /api/boards, /api/analyze; serves web/dist
+
+web/src/
+  types.ts       TS mirror of CardInfo / Report.to_api_dict / deck + board shapes
+  api.ts         fetch wrappers
+  util.ts        client-side sort/filter, symbol URLs, pure board ops (moveCard, addGroup…)
+  App.tsx        state: decks, current deck, view, grouping ("auto:<mode>" | "board:<id>"), sort, search
+  components/    BoardView (dnd-kit), TableView, GridView, CardDetail, Dialogs, HoverPreview, Symbols
 ```
 
-`Report.to_dict()` / `CardInfo` fields form the de facto data contract for any UI. Changing field
-names means a breaking change for the frontend.
+Data contract: `CardInfo` fields and `Report.to_api_dict()` are mirrored in `web/src/types.ts`. **Change
+both together.** Grouping logic lives only in Python (the API returns membership for every mode).
+Sorting and filtering are client-side.
 
 ## Conventions and gotchas
 

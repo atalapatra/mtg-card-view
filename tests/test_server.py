@@ -1,0 +1,77 @@
+"""API tests: FastAPI TestClient + mocked Scryfall (no network)."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from mtgcv.server import create_app
+from mtgcv.store import DeckStore
+from test_scryfall_and_analyze import make_client
+
+DECK = "Commander\n1 Sol Ring\nDeck\n1 Swords to Plowshares\n1 Wrath of God\n2 Lightning Bolt\n1 Command Tower\n"
+
+
+@pytest.fixture
+def api(tmp_path, monkeypatch):
+    monkeypatch.setattr("mtgcv.scryfall.MIN_INTERVAL", 0)
+    app = create_app(store=DeckStore(tmp_path / "decks.sqlite3"),
+                     client=make_client(tmp_path, []), web_dist=None)
+    return TestClient(app)
+
+
+def test_analyze(api):
+    r = api.post("/api/analyze", json={"text": DECK})
+    assert r.status_code == 200
+    data = r.json()
+    keys = {c["key"] for c in data["cards"]}
+    assert "commander:Sol Ring" in keys and "main:Lightning Bolt" in keys
+    removal = next(g for g in data["groupings"]["category"] if g["name"] == "Removal")
+    assert set(removal["cards"]) == {"main:Swords to Plowshares", "main:Wrath of God", "main:Lightning Bolt"}
+    assert set(data["groupings"]) >= {"category", "primary", "type", "cmc", "color", "section"}
+
+
+def test_deck_and_board_lifecycle(api):
+    r = api.post("/api/decks", json={"name": "Test", "text": DECK})
+    assert r.status_code == 201
+    deck_id = r.json()["deck"]["id"]
+    assert r.json()["deck"]["card_count"] == 6
+
+    assert [d["name"] for d in api.get("/api/decks").json()] == ["Test"]
+
+    r = api.post(f"/api/decks/{deck_id}/boards", json={"name": "My groups", "seed": "primary"})
+    assert r.status_code == 201
+    board = r.json()
+    names = [g["name"] for g in board["layout"]["groups"]]
+    assert names[:3] == ["Land", "Board Wipe", "Removal"]
+    placed = [k for g in board["layout"]["groups"] for k in g["cards"]]
+    assert len(placed) == len(set(placed)) == 5  # each card placed exactly once
+
+    layout = {"groups": [{"id": "x", "name": "Interaction",
+                          "cards": ["main:Swords to Plowshares", "main:Wrath of God"]}]}
+    r = api.patch(f"/api/boards/{board['id']}", json={"name": "Renamed", "layout": layout})
+    assert r.json()["name"] == "Renamed"
+    assert r.json()["layout"] == layout
+
+    dup = {"groups": [{"id": "a", "name": "A", "cards": ["main:Wrath of God"]},
+                      {"id": "b", "name": "B", "cards": ["main:Wrath of God", "main:Lightning Bolt"]}]}
+    r = api.patch(f"/api/boards/{board['id']}", json={"layout": dup})
+    assert [g["cards"] for g in r.json()["layout"]["groups"]] == [["main:Wrath of God"], ["main:Lightning Bolt"]]
+    api.patch(f"/api/boards/{board['id']}", json={"layout": layout})
+
+    detail = api.get(f"/api/decks/{deck_id}").json()
+    assert detail["boards"][0]["layout"] == layout
+
+    r = api.patch(f"/api/decks/{deck_id}", json={"text": DECK + "1 Fire // Ice\n"})
+    assert any(c["name"] == "Fire // Ice" for c in r.json()["report"]["cards"])
+
+    assert api.delete(f"/api/boards/{board['id']}").status_code == 204
+    assert api.delete(f"/api/decks/{deck_id}").status_code == 204
+    assert api.get(f"/api/decks/{deck_id}").status_code == 404
+    assert api.delete(f"/api/boards/{board['id']}").status_code == 404
+
+
+def test_empty_seed_and_validation(api):
+    deck_id = api.post("/api/decks", json={"name": "D", "text": DECK}).json()["deck"]["id"]
+    board = api.post(f"/api/decks/{deck_id}/boards", json={"name": "Blank", "seed": "empty"}).json()
+    assert board["layout"] == {"groups": []}
+    assert api.post("/api/decks", json={"name": "", "text": DECK}).status_code == 422
+    assert api.post(f"/api/decks/{deck_id}/boards", json={"name": "x", "seed": "bogus"}).status_code == 422

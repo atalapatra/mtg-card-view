@@ -3,27 +3,34 @@
 _Last updated: 2026-11-16_
 
 ## Done
-- Python core package `mtgcv` (see CLAUDE.md for the module map)
-  - Deck list parsing: plain, Moxfield, MTGA, Archidekt `[categories]`, `#hashtags`, section headers,
-    split names, duplicate merging
+- **Python core** (`src/mtgcv/`, see CLAUDE.md)
+  - Deck list parsing: plain, Moxfield, MTGA, Archidekt `[categories]`, `#hashtags`, sections, split names
   - Scryfall lookup: batched, rate-limited, fuzzy fallback, 7-day SQLite cache
   - Oracle tags from the bulk file, with hierarchy inheritance, aliases, and `strong_tags`
   - About 30 deck-role categories with a primary category per card
-  - Grouping: category, primary, type, cmc, color, section, user_tag, none.
-    Sorting: edhrec, name, cmc, price
-  - Summary: counts, lands, average MV, color identity, median EDHREC rank, Game Changers, price, category counts
-  - CLI: `analyze` (table or `--json`), `card`, `refresh-tags`
-- 10 offline tests passing
-- Verified live against `examples/sample_deck.txt`
+  - CLI: `analyze`, `card`, `refresh-tags`, `serve`
+- **API** (`server.py`, FastAPI) with deck CRUD, custom grouping ("board") CRUD, and analyze. Stored in SQLite (`store.py`).
+- **Web UI** (`web/`, React + Vite + TS)
+  - Saved decks sidebar. The paste dialog creates or edits a deck.
+  - Summary stats: counts, lands, average MV, color identity, median EDHREC rank, Game Changers, price
+  - Board / Table / Images views. Group by any built-in mode or a custom grouping. Sort by EDHREC rank,
+    name, MV, or price. Text filter across name, oracle text, tags, and categories.
+  - Custom groupings: create (seeded or empty), drag cards between groups (dnd-kit), add, rename,
+    reorder, and delete groups, auto-save
+  - Card detail panel: image (with DFC flip), EDHREC rank tier, oracle text with symbols, categories,
+    all Scryfall tags (★ for strong ones, click to filter), links to Scryfall, EDHREC, and Tagger
+  - Hover image preview. Dark and light themes follow the OS.
+- Tests: 13 offline pytest tests (parser, client, tags, analysis, API)
+- Verified manually: a live run against Scryfall, plus a headless-Edge CDP script that performs a real mouse
+  drag between groups and confirms it persisted (the script lived in the session scratchpad and is not in the repo)
 
-## Next
-1. **UI decision** (D-009 in `decisions.md`, waiting on the user): stack, layout, how custom groupings are saved, deck input
-2. Build the UI, likely with an HTTP API layer (e.g. FastAPI) over `build_report`
-3. Drag-and-drop custom groupings, seeded from `primary_category` or `user_tags`
+## Next / ideas
+- Add a frontend e2e test to the repo (e.g. Playwright) if UI regressions become a concern
+- Reorder cards *within* a group (currently sorted by the Sort setting; only membership is custom)
+- Let a card belong to multiple custom groups? (currently single placement, D-012)
+- Category tuning against more real decks (e.g. Delver of Secrets is Uncategorized)
+- Show Tagger `annotation` text; a tag-hierarchy tree or filter using `TagIndex.parents`
+- Export a custom grouping back to text (e.g. Archidekt `[Category]` format)
 
-## Open questions / ideas
-- Should Tagger `annotation` text be shown? (~3.4k taggings have one)
-- Tag hierarchy (`TagIndex.parents`) could power a tag tree or filter in the UI
-- Category list tuning: check against more real decks. Some cards are Uncategorized
-  (e.g. Delver of Secrets).
-- Nothing committed to git yet.
+## Open questions
+- Nothing committed to git yet. Waiting on the user.

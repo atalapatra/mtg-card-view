@@ -1,0 +1,445 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api } from './api';
+import { BoardView, type BoardEditHandlers } from './components/BoardView';
+import { CardDetail } from './components/CardDetail';
+import { DeckEditor, NewBoardDialog } from './components/Dialogs';
+import { GridView } from './components/GridView';
+import { usePreview } from './components/HoverPreview';
+import { ColorPips } from './components/Symbols';
+import { TableView } from './components/TableView';
+import type { BoardLayout, Card, DeckDetail, DeckSummary, GroupMode, SeedMode, SortBy, ViewGroup, ViewMode } from './types';
+import { GROUP_LABELS, SORT_LABELS, UNSORTED_ID } from './types';
+import * as ops from './util';
+import { formatRank, matchesSearch, sortCards } from './util';
+
+const LAST_DECK_KEY = 'mtgcv.lastDeck';
+
+function usePersisted<T extends string>(key: string, initial: T, allowed: readonly T[]): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const v = localStorage.getItem(`mtgcv.${key}`) as T | null;
+      return v && allowed.includes(v) ? v : initial;
+    } catch {
+      return initial;
+    }
+  });
+  const set = useCallback(
+    (v: T) => {
+      setValue(v);
+      try {
+        localStorage.setItem(`mtgcv.${key}`, v);
+      } catch {
+        /* storage unavailable */
+      }
+    },
+    [key],
+  );
+  return [value, set];
+}
+
+type Dialog = null | 'newDeck' | 'editDeck' | 'newBoard';
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+export default function App() {
+  const [decks, setDecks] = useState<DeckSummary[]>([]);
+  const [detail, setDetail] = useState<DeckDetail | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = usePersisted<ViewMode>('view', 'board', ['board', 'table', 'grid']);
+  const [sort, setSort] = usePersisted<SortBy>('sort', 'edhrec', ['edhrec', 'name', 'cmc', 'price']);
+  const [grouping, setGrouping] = useState('auto:category'); // "auto:<mode>" | "board:<id>"
+  const [search, setSearch] = useState('');
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const saveTimers = useRef(new Map<number, number>());
+
+  const run = useCallback(async <T,>(label: string, fn: () => Promise<T>): Promise<T | undefined> => {
+    setBusy(label);
+    setError(null);
+    try {
+      return await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return undefined;
+    } finally {
+      setBusy(null);
+    }
+  }, []);
+
+  const showDeck = (d: DeckDetail) => {
+    setDetail(d);
+    setSelectedKey(null);
+    setSearch('');
+    setGrouping((g) => (g.startsWith('board:') ? 'auto:category' : g));
+    try {
+      localStorage.setItem(LAST_DECK_KEY, String(d.deck.id));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Initial load: deck list + last opened deck
+  useEffect(() => {
+    run('Loading…', async () => {
+      const list = await api.listDecks();
+      setDecks(list);
+      let last: number | null = null;
+      try {
+        last = Number(localStorage.getItem(LAST_DECK_KEY)) || null;
+      } catch {
+        /* ignore */
+      }
+      const target = list.find((d) => d.id === last) ?? list[0];
+      if (target) showDeck(await api.getDeck(target.id));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const preview = usePreview();
+  useEffect(() => preview.hide(), [view, grouping, preview]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !dialog) setSelectedKey(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dialog]);
+
+  // --- deck actions -----------------------------------------------------------
+  const openDeck = (id: number) => run('Loading deck…', async () => showDeck(await api.getDeck(id)));
+
+  const createDeck = (name: string, text: string) =>
+    run('Analyzing deck… (the first run downloads Scryfall tag data)', async () => {
+      const d = await api.createDeck(name, text);
+      showDeck(d);
+      setGrouping('auto:category');
+      setDialog(null);
+      setDecks(await api.listDecks());
+    });
+
+  const saveDeck = (name: string, text: string) =>
+    detail &&
+    run('Re-analyzing…', async () => {
+      const d = await api.updateDeck(detail.deck.id, { name, text });
+      setDetail(d);
+      setDialog(null);
+      setDecks(await api.listDecks());
+    });
+
+  const deleteDeck = () => {
+    if (!detail || !confirm(`Delete “${detail.deck.name}” and its custom groupings?`)) return;
+    run('Deleting…', async () => {
+      await api.deleteDeck(detail.deck.id);
+      setDialog(null);
+      const list = await api.listDecks();
+      setDecks(list);
+      if (list[0]) showDeck(await api.getDeck(list[0].id));
+      else setDetail(null);
+    });
+  };
+
+  // --- custom groupings (boards) -------------------------------------------------
+  const board =
+    detail && grouping.startsWith('board:') ? detail.boards.find((b) => b.id === Number(grouping.slice(6))) : undefined;
+
+  const createBoard = (name: string, seed: SeedMode) =>
+    detail &&
+    run('Creating grouping…', async () => {
+      const b = await api.createBoard(detail.deck.id, name, seed);
+      setDetail((d) => d && { ...d, boards: [...d.boards, b] });
+      setGrouping(`board:${b.id}`);
+      setView('board');
+      setDialog(null);
+    });
+
+  const setBoardLayout = (boardId: number, layout: BoardLayout) => {
+    setDetail((d) => d && { ...d, boards: d.boards.map((b) => (b.id === boardId ? { ...b, layout } : b)) });
+    setSaveState('saving');
+    const pending = saveTimers.current.get(boardId);
+    if (pending) clearTimeout(pending);
+    saveTimers.current.set(
+      boardId,
+      window.setTimeout(() => {
+        saveTimers.current.delete(boardId);
+        api
+          .updateBoard(boardId, { layout })
+          .then(() => setSaveState('saved'))
+          .catch((e) => {
+            setSaveState('error');
+            setError(`Couldn't save grouping: ${e.message}`);
+          });
+      }, 400),
+    );
+  };
+
+  const renameBoard = () => {
+    if (!board) return;
+    const name = prompt('Rename grouping', board.name)?.trim();
+    if (!name || name === board.name) return;
+    run('Saving…', async () => {
+      const b = await api.updateBoard(board.id, { name });
+      setDetail((d) => d && { ...d, boards: d.boards.map((x) => (x.id === b.id ? { ...x, name: b.name } : x)) });
+    });
+  };
+
+  const deleteBoard = () => {
+    if (!board || !confirm(`Delete the custom grouping “${board.name}”?`)) return;
+    run('Deleting…', async () => {
+      await api.deleteBoard(board.id);
+      setDetail((d) => d && { ...d, boards: d.boards.filter((b) => b.id !== board.id) });
+      setGrouping('auto:primary');
+    });
+  };
+
+  const edit: BoardEditHandlers | undefined = board && {
+    onMove: (key, to) => setBoardLayout(board.id, ops.moveCard(board.layout, key, to)),
+    onRename: (id, name) => setBoardLayout(board.id, ops.renameGroup(board.layout, id, name)),
+    onDelete: (id) => setBoardLayout(board.id, ops.deleteGroup(board.layout, id)),
+    onShift: (id, delta) => setBoardLayout(board.id, ops.moveGroup(board.layout, id, delta)),
+    onAdd: (name) => setBoardLayout(board.id, ops.addGroup(board.layout, name)),
+  };
+
+  // --- derive the groups to render -------------------------------------------------
+  const cardsByKey = useMemo(() => new Map((detail?.report.cards ?? []).map((c) => [c.key, c])), [detail]);
+
+  const groups: ViewGroup[] = useMemo(() => {
+    if (!detail) return [];
+    const visible = (keys: string[]) =>
+      sortCards(
+        keys.map((k) => cardsByKey.get(k)).filter((c): c is Card => !!c && matchesSearch(c, search)),
+        sort,
+      );
+
+    if (board) {
+      const placed = new Set(board.layout.groups.flatMap((g) => g.cards));
+      const unsorted = detail.report.cards.filter((c) => !placed.has(c.key)).map((c) => c.key);
+      const custom = board.layout.groups.map((g) => ({ id: g.id, name: g.name, cards: visible(g.cards), editable: true }));
+      return [{ id: UNSORTED_ID, name: 'Unsorted', cards: visible(unsorted), editable: false }, ...custom];
+    }
+
+    const mode = grouping.slice(5) as GroupMode;
+    return (detail.report.groupings[mode] ?? [])
+      .map((g, i) => ({ id: `auto-${i}`, name: g.name, cards: visible(g.cards), editable: false }))
+      .filter((g) => g.cards.length > 0);
+  }, [detail, board, grouping, search, sort, cardsByKey]);
+
+  const selectedCard = selectedKey ? cardsByKey.get(selectedKey) : undefined;
+  const select = (c: Card) => setSelectedKey((k) => (k === c.key ? null : c.key));
+  const colorize = grouping === 'auto:category' || grouping === 'auto:primary' || !!board;
+
+  // --- render ---------------------------------------------------------------------
+  const s = detail?.report.summary;
+
+  return (
+    <div className={`app${selectedCard ? ' with-detail' : ''}`}>
+      <nav className="sidebar">
+        <div className="brand">MTG Card View</div>
+        <button className="primary new-deck" onClick={() => setDialog('newDeck')}>
+          + New deck
+        </button>
+        <ul className="deck-list">
+          {decks.map((d) => (
+            <li key={d.id}>
+              <button className={d.id === detail?.deck.id ? 'active' : ''} onClick={() => openDeck(d.id)}>
+                <span className="deck-name">{d.name}</span>
+                <span className="muted">{d.card_count}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="credit">
+          Card data &amp; images from <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>.
+          Ranks from EDHREC.
+        </p>
+      </nav>
+
+      <main className="main">
+        {error && (
+          <div className="banner error">
+            {error}
+            <button className="icon" onClick={() => setError(null)}>
+              ×
+            </button>
+          </div>
+        )}
+
+        {!detail ? (
+          !busy && (
+            <div className="empty-state">
+              <h1>Analyze a card list</h1>
+              <p>
+                Paste a deck list to see each card's role, Scryfall tags and EDHREC rank — then group, sort and organize
+                it.
+              </p>
+              <button className="primary" onClick={() => setDialog('newDeck')}>
+                Paste a deck list
+              </button>
+            </div>
+          )
+        ) : (
+          <>
+            <header className="deck-head">
+              <div className="deck-title">
+                <h1>{detail.deck.name}</h1>
+                <button onClick={() => setDialog('editDeck')}>Edit list</button>
+              </div>
+              {s && (
+                <div className="summary">
+                  <Stat label="Cards" value={`${s.total_cards}`} />
+                  <Stat label="Lands" value={`${s.lands}`} />
+                  <Stat label="Avg MV" value={`${s.average_cmc_nonland}`} hint="Average mana value of nonland cards" />
+                  <Stat label="Identity" value={<ColorPips colors={s.color_identity} />} />
+                  <Stat
+                    label="Median rank"
+                    value={formatRank(s.median_edhrec_rank)}
+                    hint="Median EDHREC rank of the cards (lower = more popular)"
+                  />
+                  <Stat
+                    label="Game Changers"
+                    value={`${s.game_changers.length}`}
+                    hint={s.game_changers.join(', ') || 'None'}
+                  />
+                  <Stat label="Price" value={`$${s.total_price_usd.toFixed(0)}`} hint="TCGplayer market (USD)" />
+                </div>
+              )}
+            </header>
+
+            {(detail.report.not_found.length > 0 || detail.report.parse_errors.length > 0) && (
+              <div className="banner warn">
+                {detail.report.not_found.length > 0 && (
+                  <div>Not found on Scryfall: {detail.report.not_found.join(', ')}</div>
+                )}
+                {detail.report.parse_errors.map((e) => (
+                  <div key={e.line}>
+                    Couldn't read line {e.line}: <code>{e.text}</code>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="toolbar">
+              <div className="segmented" role="tablist" aria-label="View">
+                {(['board', 'table', 'grid'] as ViewMode[]).map((v) => (
+                  <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
+                    {v === 'board' ? 'Board' : v === 'table' ? 'Table' : 'Images'}
+                  </button>
+                ))}
+              </div>
+
+              <label className="field">
+                Group by
+                <select
+                  value={grouping}
+                  onChange={(e) => (e.target.value === 'new' ? setDialog('newBoard') : setGrouping(e.target.value))}
+                >
+                  <optgroup label="Automatic">
+                    {(Object.keys(GROUP_LABELS) as GroupMode[]).map((m) => (
+                      <option key={m} value={`auto:${m}`}>
+                        {GROUP_LABELS[m]}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Custom groupings">
+                    {detail.boards.map((b) => (
+                      <option key={b.id} value={`board:${b.id}`}>
+                        {b.name}
+                      </option>
+                    ))}
+                    <option value="new">+ New custom grouping…</option>
+                  </optgroup>
+                </select>
+              </label>
+
+              <label className="field">
+                Sort
+                <select value={sort} onChange={(e) => setSort(e.target.value as SortBy)}>
+                  {(Object.keys(SORT_LABELS) as SortBy[]).map((k) => (
+                    <option key={k} value={k}>
+                      {SORT_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <input
+                className="search"
+                type="search"
+                placeholder="Filter by name, text, tag…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+
+              {board && (
+                <div className="board-actions">
+                  <span className={`save-state ${saveState}`}>
+                    {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : ''}
+                  </span>
+                  <button onClick={renameBoard}>Rename</button>
+                  <button className="danger" onClick={deleteBoard}>
+                    Delete grouping
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {board && view !== 'board' && (
+              <p className="hint">Switch to Board view to drag cards between groups.</p>
+            )}
+            {grouping === 'auto:category' && (
+              <p className="hint">Cards appear in every category they fit. Use “Primary category” to show each card once.</p>
+            )}
+
+            <div className="content">
+              {view === 'board' && (
+                <BoardView groups={groups} selectedKey={selectedKey} onSelect={select} edit={edit} colorize={colorize} />
+              )}
+              {view === 'table' && (
+                <TableView groups={groups} selectedKey={selectedKey} onSelect={select} sort={sort} onSort={setSort} />
+              )}
+              {view === 'grid' && <GridView groups={groups} selectedKey={selectedKey} onSelect={select} />}
+            </div>
+          </>
+        )}
+      </main>
+
+      {selectedCard && detail && (
+        <CardDetail
+          card={selectedCard}
+          tagDescriptions={detail.report.tag_descriptions}
+          onClose={() => setSelectedKey(null)}
+          onSearch={setSearch}
+        />
+      )}
+
+      {busy && (
+        <div className="busy">
+          <span className="spinner" /> {busy}
+        </div>
+      )}
+
+      {dialog === 'newDeck' && <DeckEditor isNew onSave={createDeck} onClose={() => setDialog(null)} />}
+      {dialog === 'editDeck' && detail && (
+        <DeckEditor
+          isNew={false}
+          initialName={detail.deck.name}
+          initialText={detail.deck.text}
+          onSave={saveDeck}
+          onDelete={deleteDeck}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'newBoard' && <NewBoardDialog onCreate={createBoard} onClose={() => setDialog(null)} />}
+    </div>
+  );
+}
+
+function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
+  return (
+    <div className="stat" title={hint}>
+      <span className="stat-value">{value}</span>
+      <span className="stat-label">{label}</span>
+    </div>
+  );
+}
