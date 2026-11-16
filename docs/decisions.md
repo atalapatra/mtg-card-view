@@ -1,0 +1,86 @@
+# Decisions Log
+
+Append-only. Newest at the bottom. To change a decision, add a new entry that supersedes the
+old one (and mark the old one `Superseded by D-NNN`). Don't edit history.
+
+Format: **ID · date · status**, then Context / Decision / Consequences.
+Status: `Accepted`, `Proposed` (awaiting user), `Superseded by D-NNN`.
+
+---
+
+## D-001 · 2026-11-16 · Accepted
+**Python core, frontend free to be non-Python**
+
+- Context: The user asked for a Python app that pulls Scryfall data. The front end doesn't need to be Python.
+- Decision: All data fetching, parsing, categorization, grouping, and sorting live in the Python package
+  `mtgcv`. Any UI consumes its JSON output, or a future HTTP API that wraps it.
+- Consequences: The CLI and the UI share one code path. `CardInfo`/`Report.to_dict()` is the data contract.
+
+## D-002 · 2026-11-16 · Accepted
+**Category tags come from Scryfall's Oracle Tags bulk file**
+
+- Context: Scryfall card objects do not include Tagger tags. Alternatives considered:
+  per-tag `otag:` searches (many requests), the unofficial Tagger GraphQL API (brittle, needs
+  CSRF tokens), and `api.scryfall.com/private/tags/oracle` (undocumented).
+- Decision: Use the official bulk file at `GET /bulk-data/oracle-tags` → `jsonl_download_uri` (~6 MB gz).
+  Check for updates at most once a day. Fall back to the cached copy when offline.
+- Consequences: One download covers every card. See `scryfall-notes.md` for format details.
+
+## D-003 · 2026-11-16 · Accepted
+**Inherit ancestor tags, canonicalize labels, expand aliases for matching**
+
+- Context: The bulk file lists only *direct* taggings (`removal` has 0 direct cards, 25 child tags).
+  Labels mix styles (`mana rock` vs `mana-rock`), and many tags have aliases.
+- Decision: Each card gets the full ancestor closure of its direct tags. Labels become hyphenated
+  slugs. Category matching uses slugs plus aliases. Refinement rules use canonical slugs only.
+- Consequences: The counts match the scryfall.com `otag:` search exactly (ramp 2,495; removal 6,751).
+
+## D-004 · 2026-11-16 · Accepted
+**Collapse ~4,600 tags into ~30 curated deck-role categories**
+
+- Context: Raw tags are too granular to group a deck by (`manarock-ccc`, `full-refund`).
+- Decision: `categories.py` defines an ordered list of roles (Land, Board Wipe, Counterspell, Removal,
+  Ramp, Tutor, Card Advantage, …). A card can belong to several categories. The first match in list
+  order is its `primary_category`. Some categories also use rules derived from card data
+  (Land from the type line, Fixing from `produced_mana`, Tokens from oracle text). Raw tags stay on every card.
+- Refinements: lands aren't Ramp unless tagged land-ramp/extra-land; land-only tutors are
+  Ramp, not Tutor; opponent-only lifegain (Swords to Plowshares) isn't Lifegain.
+- Consequences: `--group-by category` shows a card in every group it fits. `--group-by primary` places
+  each card exactly once, which suits the future drag-and-drop default placement.
+
+## D-005 · 2026-11-16 · Accepted
+**Expose Tagger `very_strong` weights as `strong_tags`**
+
+- Context: The user wants to know how effective a card is at a role. Tagger taggings carry a `weight`.
+  About 631 are `very_strong` (e.g. Sol Ring → `mana-rock`). Everything else is `median`.
+- Decision: Surface these as `CardInfo.strong_tags`. Use EDHREC rank as the primary popularity signal.
+- Consequences: The signal is sparse. Don't treat a missing strong tag as "weak".
+
+## D-006 · 2026-11-16 · Accepted
+**Card lookup via `/cards/collection` by front-face name, with a fuzzy fallback**
+
+- Context: `/cards/collection` rejects full `A // B` names but resolves front-face names for
+  split, adventure, and DFC cards. Response order isn't reliable to match against the request.
+- Decision: Batch 75 front-face names per request. Match results by an accent-insensitive normalized
+  name across all faces. Fall back to `/cards/named` exact, then fuzzy.
+- Consequences: Typos resolve, but the cache key is the *requested* name (a typo gets its own cache entry).
+
+## D-007 · 2026-11-16 · Accepted
+**Local caching: SQLite for cards (7-day TTL), file for tags**
+
+- Decision: Cache in `%LOCALAPPDATA%\mtg-card-view` (or `~/.cache/mtg-card-view`). Override with `MTGCV_CACHE_DIR`.
+- Rationale: EDHREC rank and prices drift slowly, and caching keeps repeat runs under 1 second.
+
+## D-008 · 2026-11-16 · Accepted
+**Minimal dependencies: `httpx` only (plus `pytest` for dev); dataclasses, not pydantic**
+
+- Rationale: Keep the core light until the UI/API decision is made. Revisit if a FastAPI layer is added
+  (pydantic would come along with it).
+
+## D-009 · 2026-11-16 · Proposed
+**UI stack** (awaiting the user's decision)
+
+- Options presented: (A) React + Vite with a FastAPI server, *recommended* for dnd-kit drag and drop;
+  (B) Svelte with FastAPI; (C) a Python-only UI (NiceGUI or Streamlit), weak at drag and drop; (D) a Tauri desktop wrapper around A.
+- Related open decisions: layout (board columns, table, or image grid), where custom groupings are saved
+  (browser only or backend SQLite), and deck input (paste, upload, or Moxfield/Archidekt URL import).
