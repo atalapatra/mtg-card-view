@@ -13,9 +13,21 @@ interface Props {
   connections?: Connection[];
   cardsByKey?: Map<string, Card>;
   onSelectKey?: (key: string) => void;
+  /** Graph view: the link currently open in the other sidebar (highlighted). */
+  activeLinkKey?: string | null;
 }
 
-function Connections({ list, cardsByKey, onSelectKey }: { list: Connection[]; cardsByKey: Map<string, Card>; onSelectKey: (k: string) => void }) {
+function Connections({
+  list,
+  cardsByKey,
+  onSelectKey,
+  activeKey,
+}: {
+  list: Connection[];
+  cardsByKey: Map<string, Card>;
+  onSelectKey: (k: string) => void;
+  activeKey?: string | null;
+}) {
   const [all, setAll] = useState(false);
   const shown = all ? list : list.slice(0, 12);
   return (
@@ -28,8 +40,12 @@ function Connections({ list, cardsByKey, onSelectKey }: { list: Connection[]; ca
       ) : (
         <ul className="conn-list">
           {shown.map((c) => (
-            <li key={c.key}>
-              <button className="link-btn" onClick={() => onSelectKey(c.key)}>
+            <li key={c.key} className={c.key === activeKey ? 'active' : undefined}>
+              <button
+                className="link-btn"
+                onClick={() => onSelectKey(c.key)}
+                title="Open this card next to this one and compare their synergy"
+              >
                 {cardsByKey.get(c.key)?.name ?? c.key}
               </button>
               <span className="muted">{c.label}</span>
@@ -46,7 +62,16 @@ function Connections({ list, cardsByKey, onSelectKey }: { list: Connection[]; ca
   );
 }
 
-export function CardDetail({ card, tagDescriptions, onClose, onSearch, connections, cardsByKey, onSelectKey }: Props) {
+export function CardDetail({
+  card,
+  tagDescriptions,
+  onClose,
+  onSearch,
+  connections,
+  cardsByKey,
+  onSelectKey,
+  activeLinkKey,
+}: Props) {
   const [showBack, setShowBack] = useState(false);
   const img = showBack && card.image_back ? card.image_back : card.image_normal;
   const strong = new Set(card.strong_tags);
@@ -114,7 +139,7 @@ export function CardDetail({ card, tagDescriptions, onClose, onSearch, connectio
           </div>
 
           {connections && cardsByKey && onSelectKey && (
-            <Connections list={connections} cardsByKey={cardsByKey} onSelectKey={onSelectKey} />
+            <Connections list={connections} cardsByKey={cardsByKey} onSelectKey={onSelectKey} activeKey={activeLinkKey} />
           )}
 
           <h4>Categories</h4>

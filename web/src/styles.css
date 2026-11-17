@@ -1051,3 +1051,113 @@ code {
   color: var(--ok);
   margin: 0;
 }
+
+/* --- two sidebars + synergy box (graph view) ---------------------------------------- */
+.app.with-pair {
+  grid-template-columns: 220px minmax(0, 1fr) min(720px, 52vw);
+}
+.side-pair {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+.side-cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.side-cols .detail {
+  min-height: 0;
+  padding: 12px 12px 30px;
+}
+.side-cols .detail:first-child {
+  border-left: none;
+}
+.synergy-box {
+  flex: none;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.synergy-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.synergy-head img {
+  width: 44px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.synergy-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.synergy-arrow {
+  color: var(--accent);
+  margin: 0 4px;
+}
+.synergy-body h4 {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.synergy-body p {
+  margin: 2px 0;
+}
+.synergy-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.synergy-list code,
+.shared-tags code {
+  font-size: 11px;
+  margin: 0 2px;
+}
+.shared-tags {
+  font-size: 12px;
+  line-height: 1.9;
+}
+.syn-pos {
+  color: var(--ok);
+}
+.syn-neg {
+  color: var(--danger);
+}
+.conn-list li.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin: 0 -4px;
+}
+
+@media (max-width: 900px) {
+  .app.with-pair {
+    grid-template-columns: 1fr;
+  }
+  .side-pair {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(720px, 100%);
+    z-index: 30;
+    box-shadow: var(--shadow);
+  }
+  .side-cols .detail {
+    position: static;
+    width: auto;
+    box-shadow: none;
+  }
+}

@@ -28,7 +28,10 @@ _Last updated: 2026-11-16_
 - **ManaBox CSV import** (D-018): an "Import ManaBox CSV…" button and file drop in the deck dialog convert
   the export to a plain card list for review. Tokens and wishlist lists are left out by default, with
   checkboxes to include them. The CLI auto-detects ManaBox CSVs. Binder information is not used yet.
-- Tests: 26 offline pytest tests (parser, client, tags, analysis, API, synergy, EDHREC, ManaBox import)
+- **Pair comparison in the graph** (D-019): clicking a synergy link opens a second sidebar, and a box above
+  both explains the pair: linking themes with payoff/enabler roles and matched tags, EDHREC commander numbers,
+  and shared categories and tags.
+- Tests: 29 offline pytest tests (parser, client, tags, analysis, API, synergy, EDHREC, ManaBox import, pair explain)
 - Verified manually: a live run against Scryfall, plus a headless-Edge CDP script that performs a real mouse
   drag between groups and confirms it persisted (the script lived in the session scratchpad and is not in the repo)
 
@@ -48,6 +51,9 @@ _Last updated: 2026-11-16_
 
 - ManaBox binders/decks (Binder Name / Binder Type) could later become tags or separate decks. The user
   deferred this (D-018).
+
+- Theme gap spotted: Tekuthal (proliferate doubler) and Flux Channeler (proliferates) have no tag theme linking
+  them. Tekuthal's tags may not include a proliferate-payoff tag, so check this in `THEMES`.
 
 ## Open questions
 - Nothing committed to git yet. Waiting on the user.

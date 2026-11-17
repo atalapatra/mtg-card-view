@@ -10,6 +10,8 @@ interface Props {
   search: (card: Card) => boolean;
   searchActive: boolean;
   selectedKey: string | null;
+  /** Card open in the second sidebar (from a synergy link). */
+  pairKey: string | null;
   onSelect: (card: Card | null) => void;
   /** Reports each card's connections (for the detail panel). */
   onConnections: (conns: Map<string, Connection[]> | null) => void;
@@ -52,7 +54,16 @@ type Phase =
 
 const MODE_KEY = 'mtgcv.graphMode';
 
-export function GraphView({ deckId, cardsByKey, search, searchActive, selectedKey, onSelect, onConnections }: Props) {
+export function GraphView({
+  deckId,
+  cardsByKey,
+  search,
+  searchActive,
+  selectedKey,
+  pairKey,
+  onSelect,
+  onConnections,
+}: Props) {
   const [mode, setModeState] = useState<GraphMode>(() => {
     try {
       return localStorage.getItem(MODE_KEY) === 'edhrec' ? 'edhrec' : 'tags';
@@ -295,6 +306,7 @@ export function GraphView({ deckId, cardsByKey, search, searchActive, selectedKe
             edges={prepared?.edges ?? []}
             minRaw={threshold}
             selectedKey={selectedKey}
+            secondaryKey={pairKey}
             searchMatches={searchMatches}
             onSelect={onSelect}
             onMoved={() => savePositions(nodes, mode)}

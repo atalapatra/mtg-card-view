@@ -181,3 +181,24 @@ Status: `Accepted`, `Proposed` (awaiting user), `Superseded by D-NNN`.
   wishlist-type lists (`Binder Type = list`).
 - `POST /api/import/manabox` does the conversion and saves nothing. The UI fills the card-list box so the user can
   review it before saving. The CLI auto-detects ManaBox CSVs (`--include-tokens`, `--include-lists`).
+
+## D-019 · 2026-11-17 · Accepted
+**Graph view: synergy links open a second sidebar, with a synergy box above both** (requested by the user)
+
+- Clicking a synergy link in the card sidebar (graph view only) opens the linked card in a second sidebar
+  beside the first. A box spans the top of both and explains the pair.
+- Box contents come from `GET /api/decks/{id}/pair?a=&b=` → `synergy.explain_pair()`:
+  - **Scryfall themes**, in both directions: which card is the payoff and which the enabler, plus the tags or rule
+    that matched on each side. Rule-based matches carry readable labels (e.g. "Artifact card",
+    "has an enters-the-battlefield trigger").
+  - **EDHREC**, when either card is a commander: synergy %, plus inclusion as "in N of M eligible decks". Otherwise a
+    status (`not_listed`, `no_page`, `not_downloaded`). Reads the EDHREC cache only and never triggers a download.
+  - **In common**: shared categories and shared Scryfall tags.
+- Interaction choices (made by Claude, open to change):
+  - A link clicked in the *second* sidebar walks the chain: the second card moves to the first sidebar and the
+    clicked card opens in the second.
+  - Closing the first sidebar promotes the second. ⇄ swaps the two cards.
+  - Escape closes the second sidebar first, then the first.
+  - Selecting a card on the canvas, or leaving the graph view, closes the second sidebar.
+  - On the canvas the second card gets a dashed gold outline, and the link between the pair is drawn thick.
+  - The canvas keeps its view centered when the side panel resizes it.

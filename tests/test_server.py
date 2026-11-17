@@ -35,6 +35,16 @@ def test_import_manabox(api):
     assert api.post("/api/import/manabox", json={"csv": "a,b\n1,2\n"}).status_code == 422
 
 
+def test_pair_endpoint(api):
+    deck_id = api.post("/api/decks", json={"name": "D", "text": DECK}).json()["deck"]["id"]
+    r = api.get(f"/api/decks/{deck_id}/pair", params={"a": "main:Swords to Plowshares", "b": "main:Wrath of God"})
+    assert r.status_code == 200
+    assert "Removal" in r.json()["shared_categories"] and r.json()["edhrec"] == []
+    r = api.get(f"/api/decks/{deck_id}/pair", params={"a": "commander:Sol Ring", "b": "main:Wrath of God"})
+    assert [e["status"] for e in r.json()["edhrec"]] == ["not_downloaded"]  # cache only, never fetches
+    assert api.get(f"/api/decks/{deck_id}/pair", params={"a": "main:Nope", "b": "main:Wrath of God"}).status_code == 404
+
+
 def test_graph_endpoints(api):
     deck_id = api.post("/api/decks", json={"name": "D", "text": DECK}).json()["deck"]["id"]
     r = api.get(f"/api/decks/{deck_id}/graph", params={"mode": "tags"})
