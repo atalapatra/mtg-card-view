@@ -37,7 +37,14 @@ dragged and dropped into custom groupings.
 
 cd web; npm install; npm run build                        # build UI (tsc typecheck + vite)
 cd web; npm run dev                                       # UI dev server :5173, proxies /api -> :8000
+
+.\packaging\build_exe.ps1                                # dist\GraphMTG.exe (PyInstaller, bundles web/dist)
+.\.venv\Scripts\graphmtg                                  # the exe's launcher, unbuilt (port 8737, opens browser)
 ```
+
+Releases: bump `__version__` in `src/mtgcv/__init__.py` (single source), tag `vX.Y.Z`, push the tag, and
+`.github/workflows/release.yml` builds and publishes GraphMTG.exe. When testing the exe/launcher, set
+`MTGCV_DATA_DIR`/`MTGCV_CACHE_DIR` to scratch folders and `GRAPHMTG_NO_BROWSER=1`.
 
 When testing the server manually, set `$env:MTGCV_DATA_DIR` to a scratch folder so you don't write
 into the user's real saved decks.
@@ -53,7 +60,9 @@ categories.py  CATEGORIES: ordered list mapping tag slugs -> ~30 deck roles; ord
 analyze.py     CardInfo dataclass, build_report, group_cards, sort_cards, summarize
 cli.py         argparse CLI (`mtgcv` entry point)
 store.py       DeckStore: SQLite decks + boards (custom groupings) + graph_layouts in the data dir
-server.py      FastAPI app (create_app) — /api/decks, /api/boards, /api/analyze, /api/decks/{id}/graph; serves web/dist
+server.py      FastAPI app (create_app) — /api/decks, /api/boards, /api/analyze, /api/decks/{id}/graph, /api/health;
+               serves the built UI (find_web_dist: env override, exe bundle, package, repo web/dist)
+launcher.py    GraphMTG.exe / `graphmtg`: single instance via <data dir>/server.json, free port, opens browser
 edhrec.py      EdhrecClient (unofficial JSON, cached, 0.5 s/request) + EdhrecFetcher (background jobs)
 synergy.py     THEMES (payoff <-> enabler), build_tag_graph, build_edhrec_graph, commander_hubs, explain_pair
 

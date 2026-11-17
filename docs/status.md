@@ -39,7 +39,12 @@ _Last updated: 2026-11-16_
   synergy); filter bar (colors, type, category, MV, EDHREC rank, rarity, price) hides cards in all views; delete
   collections from the header or sidebar; Median rank stat removed.
 
+- **Standalone Windows app** (D-021): `packaging/build_exe.ps1` → `dist\GraphMTG.exe`; launcher with single-instance,
+  free-port and browser handling; version in sidebar; GitHub Actions release workflow (not yet run on GitHub).
+
 ## Next / ideas
+- Run the release workflow once manually on GitHub (Actions → Build GraphMTG → Run workflow) before the first tag.
+- Optional: code signing (removes the SmartScreen warning), macOS build, native window (pywebview).
 - Graph: the whole-library tag graph is one dense "hairball" (broad themes like Artifacts and Spellslinger
   connect everything). Options: lay out using only links at or above the current filter, or color nodes by theme or cluster.
   Ask the user before changing it.

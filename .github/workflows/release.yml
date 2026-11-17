@@ -1,0 +1,85 @@
+# Builds GraphMTG.exe on Windows.
+#  * Push a tag vX.Y.Z (matching __version__ in src/mtgcv/__init__.py) -> test, build, smoke-test,
+#    and publish a GitHub Release with GraphMTG.exe attached.
+#  * "Run workflow" (manual) -> same build; the exe is kept as a downloadable workflow artifact only.
+name: Build GraphMTG
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Check tag matches app version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path src/mtgcv/__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$v" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match __version__ v$v" }
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pytest -q
+
+      - name: Build GraphMTG.exe
+        shell: pwsh
+        run: ./packaging/build_exe.ps1
+
+      - name: Smoke-test the exe
+        shell: pwsh
+        run: |
+          $env:MTGCV_DATA_DIR = "$env:RUNNER_TEMP\gm-data"
+          $env:MTGCV_CACHE_DIR = "$env:RUNNER_TEMP\gm-cache"
+          $env:GRAPHMTG_NO_BROWSER = "1"
+          $p = Start-Process -FilePath dist/GraphMTG.exe -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 120; $i++) {
+            if (Test-Path "$env:MTGCV_DATA_DIR/server.json") {
+              $port = (Get-Content "$env:MTGCV_DATA_DIR/server.json" -Raw | ConvertFrom-Json).port
+              try {
+                $h = Invoke-RestMethod "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+                $html = (Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$port/").Content
+                if ($h.app -eq "graphmtg" -and $html -match "<title>GraphMTG</title>") { $ok = $true; break }
+              } catch {}
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { throw "GraphMTG.exe did not start and serve the UI" }
+          "GraphMTG.exe started and served v$($h.version)"
+
+      - name: Upload exe (workflow artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: GraphMTG-windows
+          path: dist/GraphMTG.exe
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/GraphMTG.exe `
+            --title "GraphMTG ${{ github.ref_name }}" `
+            --notes-file packaging/RELEASE_NOTES.md

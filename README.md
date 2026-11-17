@@ -6,7 +6,25 @@ draws your cards as a synergy graph. Group them by what they do, sort by popular
 
 The code, the `mtgcv` command and the data folders keep their original `mtg-card-view` / `mtgcv` names (D-020).
 
-## Setup
+## Download and run (Windows)
+
+Download **GraphMTG.exe** from the repo's **Releases** page and double-click it. It opens in your browser, and a small
+console window stays open while it runs; close that window to quit. Windows may warn that the app is unrecognized
+(it isn't code-signed). Click **More info → Run anyway**. Collections are stored on your own computer (see
+"How it works" below). Nothing is uploaded anywhere.
+
+## Releasing a new version
+
+1. Bump `__version__` in `src/mtgcv/__init__.py` (the only place the version lives).
+2. Commit, then tag and push: `git tag v0.2.0; git push origin v0.2.0`.
+3. The **Build GraphMTG** GitHub Actions workflow tests, builds and smoke-tests `GraphMTG.exe`, then publishes a
+   Release with it attached (notes from `packaging/RELEASE_NOTES.md`). Use **Run workflow** to build without
+   releasing.
+
+To build locally: `.\packaging\build_exe.ps1` → `dist\GraphMTG.exe` (~17 MB). It needs Node 22+ and the `.venv`.
+`graphmtg` (installed with the package) runs the same launcher without building an exe.
+
+## Setup (development)
 
 ```powershell
 python -m venv .venv
@@ -108,3 +126,9 @@ docs/            decisions log, status, Scryfall API notes
 ```powershell
 pytest
 ```
+
+---
+
+GraphMTG is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.
+Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+Card data and images: [Scryfall](https://scryfall.com). Commander synergy: [EDHREC](https://edhrec.com).

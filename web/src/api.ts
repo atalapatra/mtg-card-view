@@ -31,6 +31,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
+  health: () => req<{ app: string; version: string }>('GET', '/api/health'),
   listDecks: () => req<DeckSummary[]>('GET', '/api/decks'),
   getDeck: (id: number) => req<DeckDetail>('GET', `/api/decks/${id}`),
   createDeck: (name: string, text: string) => req<DeckDetail>('POST', '/api/decks', { name, text }),
