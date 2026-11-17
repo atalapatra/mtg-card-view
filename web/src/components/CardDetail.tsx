@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Card } from '../types';
+import type { Card, Connection } from '../types';
 import { formatPrice, formatRank, rankTier, RANK_TIER_LABEL } from '../util';
 import { ManaCost, SymbolText } from './Symbols';
 import { CategoryChips } from './TableView';
@@ -9,9 +9,44 @@ interface Props {
   tagDescriptions: Record<string, string>;
   onClose: () => void;
   onSearch: (q: string) => void;
+  /** Graph view only: this card's synergy links. */
+  connections?: Connection[];
+  cardsByKey?: Map<string, Card>;
+  onSelectKey?: (key: string) => void;
 }
 
-export function CardDetail({ card, tagDescriptions, onClose, onSearch }: Props) {
+function Connections({ list, cardsByKey, onSelectKey }: { list: Connection[]; cardsByKey: Map<string, Card>; onSelectKey: (k: string) => void }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? list : list.slice(0, 12);
+  return (
+    <>
+      <h4>
+        Synergy links <span className="muted">({list.length})</span>
+      </h4>
+      {list.length === 0 ? (
+        <p className="muted">No links in this graph.</p>
+      ) : (
+        <ul className="conn-list">
+          {shown.map((c) => (
+            <li key={c.key}>
+              <button className="link-btn" onClick={() => onSelectKey(c.key)}>
+                {cardsByKey.get(c.key)?.name ?? c.key}
+              </button>
+              <span className="muted">{c.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.length > 12 && (
+        <button className="link-btn" onClick={() => setAll((v) => !v)}>
+          {all ? 'Show fewer' : `Show all ${list.length}`}
+        </button>
+      )}
+    </>
+  );
+}
+
+export function CardDetail({ card, tagDescriptions, onClose, onSearch, connections, cardsByKey, onSelectKey }: Props) {
   const [showBack, setShowBack] = useState(false);
   const img = showBack && card.image_back ? card.image_back : card.image_normal;
   const strong = new Set(card.strong_tags);
@@ -77,6 +112,10 @@ export function CardDetail({ card, tagDescriptions, onClose, onSearch }: Props) 
               <p className="pt">{card.loyalty ? `Loyalty ${card.loyalty}` : `${card.power}/${card.toughness}`}</p>
             )}
           </div>
+
+          {connections && cardsByKey && onSelectKey && (
+            <Connections list={connections} cardsByKey={cardsByKey} onSelectKey={onSelectKey} />
+          )}
 
           <h4>Categories</h4>
           {card.categories.length ? <CategoryChips cats={card.categories} /> : <p className="muted">None</p>}

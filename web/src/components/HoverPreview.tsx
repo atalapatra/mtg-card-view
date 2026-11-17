@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Card } from '../types';
 
 interface PreviewApi {
-  show: (card: Card, e: React.MouseEvent) => void;
+  show: (card: Card, e: { clientX: number; clientY: number }) => void;
   hide: () => void;
   /** Suppress previews (e.g. while dragging). */
   suppress: (on: boolean) => void;
@@ -19,7 +19,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<{ src: string; x: number; y: number } | null>(null);
   const suppressed = useRef(false);
 
-  const show = useCallback((card: Card, e: React.MouseEvent) => {
+  const show = useCallback((card: Card, e: { clientX: number; clientY: number }) => {
     if (suppressed.current || !card.image_normal) return;
     const x = e.clientX + 24 + W > window.innerWidth ? e.clientX - 24 - W : e.clientX + 24;
     const y = Math.max(8, Math.min(e.clientY - 60, window.innerHeight - H - 8));

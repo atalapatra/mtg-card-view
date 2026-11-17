@@ -49,6 +49,7 @@ class CardInfo:
     commander_legal: bool | None = None
     price_usd: float | None = None
     image_normal: str | None = None
+    image_small: str | None = None
     image_art_crop: str | None = None
     image_back: str | None = None
     scryfall_uri: str | None = None
@@ -126,14 +127,15 @@ def _main_type(type_line: str) -> str:
     return "Other"
 
 
-def _image_uris(card: dict) -> tuple[str | None, str | None, str | None]:
+def _image_uris(card: dict) -> tuple[str | None, str | None, str | None, str | None]:
+    """(normal, small, art_crop, back-face normal)"""
     if "image_uris" in card:
         iu = card["image_uris"]
-        return iu.get("normal"), iu.get("art_crop"), None
+        return iu.get("normal"), iu.get("small"), iu.get("art_crop"), None
     faces = card.get("card_faces") or []
     front = faces[0].get("image_uris", {}) if faces else {}
     back = faces[1].get("image_uris", {}) if len(faces) > 1 else {}
-    return front.get("normal"), front.get("art_crop"), back.get("normal")
+    return front.get("normal"), front.get("small"), front.get("art_crop"), back.get("normal")
 
 
 def _face_field(card: dict, key: str, joiner: str = " // ") -> str:
@@ -151,7 +153,7 @@ def card_info(entry: DeckEntry, card: dict | None, tags: TagIndex) -> CardInfo:
     oid = card.get("oracle_id")
     card_tags = tags.tags_for(oid)
     cats = categorize(card, tags.match_tags_for(oid), card_tags)
-    normal, art, back = _image_uris(card)
+    normal, small, art, back = _image_uris(card)
     faces = card.get("card_faces") or [{}]
     price = (card.get("prices") or {}).get("usd")
     legal = (card.get("legalities") or {}).get("commander")
@@ -183,6 +185,7 @@ def card_info(entry: DeckEntry, card: dict | None, tags: TagIndex) -> CardInfo:
         commander_legal=None if legal is None else legal == "legal",
         price_usd=float(price) if price else None,
         image_normal=normal,
+        image_small=small,
         image_art_crop=art,
         image_back=back,
         scryfall_uri=card.get("scryfall_uri"),

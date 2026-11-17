@@ -25,6 +25,15 @@ mtgcv serve --open                          # http://127.0.0.1:8000
 - Choose **Group by → + New custom grouping…** to make your own groups, then drag cards between them in the Board view.
   Changes save automatically.
 - Click a card to see its details: EDHREC rank, categories, and every Scryfall tag (★ marks cards Tagger considers defining examples of a tag).
+- **Graph** view: cards as images in a synergy network. Two weightings are available:
+  - **Scryfall tag synergy** links payoffs to enablers (e.g. "lifegain matters" ↔ lifegain cards; see `THEMES` in
+    `src/mtgcv/synergy.py`).
+  - **EDHREC commander synergy** links every legendary creature in the list to the cards EDHREC says over-perform
+    with it. The first use downloads each commander's EDHREC page, about 0.5 s each, then caches it for a week.
+
+  Drag cards to arrange them; the layout is saved per deck. **Reset layout** returns to the original arrangement.
+  Scroll to zoom and double-click empty space to fit. Hover or click a card to highlight its links. The search box
+  highlights matching cards. It works with whole collections (tested with 2,000 cards).
 
 For frontend development, run `mtgcv serve` and `cd web; npm run dev` (http://localhost:5173, hot reload).
 

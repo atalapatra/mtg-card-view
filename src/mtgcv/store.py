@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS boards (
     updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS boards_deck ON boards(deck_id);
+CREATE TABLE IF NOT EXISTS graph_layouts (
+    deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+    mode TEXT NOT NULL,
+    positions TEXT NOT NULL,
+    updated_at REAL NOT NULL,
+    PRIMARY KEY (deck_id, mode)
+);
 """
 
 
@@ -161,6 +168,29 @@ class DeckStore:
             self._db.commit()
         if cur.rowcount == 0:
             raise NotFound(f"board {board_id}")
+
+    # --- graph layouts ---------------------------------------------------------
+    # positions: {card_key: [x, y]} for one deck + graph weighting mode
+    def get_layout(self, deck_id: int, mode: str) -> dict | None:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT positions FROM graph_layouts WHERE deck_id = ? AND mode = ?", (deck_id, mode)
+            ).fetchone()
+        return json.loads(row["positions"]) if row else None
+
+    def save_layout(self, deck_id: int, mode: str, positions: dict) -> None:
+        self.get_deck(deck_id)
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO graph_layouts (deck_id, mode, positions, updated_at) VALUES (?, ?, ?, ?)",
+                (deck_id, mode, json.dumps(positions), time.time()),
+            )
+            self._db.commit()
+
+    def delete_layout(self, deck_id: int, mode: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM graph_layouts WHERE deck_id = ? AND mode = ?", (deck_id, mode))
+            self._db.commit()
 
     def close(self) -> None:
         self._db.close()

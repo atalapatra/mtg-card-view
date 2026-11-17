@@ -120,3 +120,50 @@ Status: `Accepted`, `Proposed` (awaiting user), `Superseded by D-NNN`.
 
 - A paste dialog with the same parser as the CLI. File upload and Moxfield/Archidekt URL import were
   offered and not chosen.
+
+## D-014 · 2026-11-17 · Accepted
+**Graph view: card-image nodes, two weightings, built for thousands of cards** (requested by the user)
+
+- A 4th view, "Graph". Nodes are card images, edges are synergy links. Cards can be dragged, and a Reset button
+  returns to the original layout. It has to handle a whole collection (thousands of cards) pasted as text.
+- Rendering: a custom **Canvas 2D** renderer (`web/src/graph/GraphCanvas.tsx`). Libraries weren't a good fit:
+  Sigma.js (WebGL) only draws circular image nodes, and Cytoscape slows down with thousands of image nodes.
+  The renderer draws only what's on screen, with level of detail (colored card shapes, then Scryfall `small`
+  images, then `normal` images), lazy-loads images 10 at a time, and batches edges into 4 strokes.
+- Layout: d3-force in a **Web Worker**, computed once, so dragging moves one card and doesn't re-run the
+  physics. It's deterministic (d3-force v3 uses a seeded random number generator and the server returns a stable node order), so
+  **Reset = delete the saved layout and recompute**. That yields the same original layout (verified: 0.00 difference).
+- Measured on a 2,000-card list: tags graph ready in about 3 s, EDHREC graph in about 3.3 s (pages cached).
+
+## D-015 · 2026-11-17 · Accepted
+**EDHREC weighting: every legendary creature is a commander hub** (chosen by the user)
+
+- Hubs are cards in the Commander section, legendary creatures, and "can be your commander" cards. Edges go
+  from a commander to a card, weighted by EDHREC `synergy`. Each non-commander card keeps its top 5 commanders.
+  Synergy below 1% and basic lands are dropped.
+- Data comes from EDHREC's unofficial JSON (`json.edhrec.com/pages/commanders/<slug>.json`). See
+  `docs/edhrec-notes.md`. Pages are fetched by a background job (`EdhrecFetcher`) at 0.5 s per request and
+  cached for 7 days (404s for 1 day). The UI polls and shows progress. About 200 commanders took about 106 s
+  the first time.
+- Risk: it's an unofficial endpoint and may change without notice. All parsing lives in `CommanderPage.parse`.
+
+## D-016 · 2026-11-17 · Accepted
+**Tag weighting: payoff ↔ enabler themes** (chosen by the user)
+
+- `src/mtgcv/synergy.py` defines `THEMES`: about 25 curated themes, each pairing payoff tags with enabler tags or rules
+  (e.g. `lifegain-matters` ↔ the Lifegain category; `synergy-artifact` ↔ artifact cards and artifact-token makers).
+  There are also generic typal themes: a `typal-<type>` payoff links to creatures of that type actually present in the list,
+  with changelings counting as every type.
+- Edge weight is the number of themes linking the pair. All typal themes between one pair count as one,
+  since changelings would otherwise inflate it. Each card keeps its top 8 edges; an edge survives if
+  either endpoint keeps it.
+- Enter-the-battlefield effects have no Tagger tag, so the Blink theme detects them from oracle text.
+
+## D-017 · 2026-11-17 · Accepted
+**Graph positions saved per deck and mode; unconnected cards shown in an outer ring** (chosen by the user)
+
+- A `graph_layouts` table holds `(deck_id, mode) → {card_key: [x, y]}`. The computed layout is saved too, so
+  reopening is instant. Drags save after an 800 ms debounce. When the deck changes, saved cards stay pinned and only new
+  cards get laid out.
+- Cards with no edges go on a sunflower-pattern ring outside the connected graph, most popular (EDHREC rank) innermost.
+- The edge filter in the toolbar (minimum themes / minimum synergy) only affects drawing, not layout.
