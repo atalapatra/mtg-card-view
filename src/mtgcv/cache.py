@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
 import time
 from pathlib import Path
 
@@ -20,6 +21,8 @@ def default_cache_dir() -> Path:
     override = os.environ.get("MTGCV_CACHE_DIR")
     if override:
         return Path(override)
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches" / "mtg-card-view"
     if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
         return Path(os.environ["LOCALAPPDATA"]) / "mtg-card-view"
     xdg = os.environ.get("XDG_CACHE_HOME")

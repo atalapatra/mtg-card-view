@@ -1,7 +1,10 @@
-"""Generate packaging/graphmtg.ico (no dependencies): gold card-shaped nodes joined
-by links on a dark rounded square, echoing the app's graph view.
+"""Generate the app icons (no dependencies): gold card-shaped nodes joined by links on a
+dark rounded square, echoing the app's graph view.
 
     python packaging/make_icon.py
+
+Writes graphmtg.ico (Windows), graphmtg.icns (macOS app), graphmtg-256.png (web favicon)
+and graphmtg-menubar.png (macOS menu-bar "template" icon: black on transparent, no background).
 """
 
 from __future__ import annotations
@@ -18,8 +21,8 @@ NODES = [(0.27, 0.30, True), (0.70, 0.24, False), (0.76, 0.66, True), (0.32, 0.7
 LINKS = [(0, 4), (1, 4), (2, 4), (3, 4), (0, 1), (2, 3), (1, 2)]
 
 
-def render(size: int) -> bytes:
-    """RGBA pixels, drawn with 4x4 supersampling."""
+def render(size: int, template: bool = False) -> bytes:
+    """RGBA pixels, drawn with 4x4 supersampling. template: black shapes, no background."""
     ss = 4
     n = size * ss
     px = [[(0, 0, 0, 0)] * n for _ in range(n)]
@@ -41,22 +44,26 @@ def render(size: int) -> bytes:
     for y in range(n):
         row = px[y]
         for x in range(n):
-            if not inside_rounded(x + 0.5, y + 0.5):
+            if not template and not inside_rounded(x + 0.5, y + 0.5):
                 continue
-            color = BG
+            color = None if template else BG
             for a, b in LINKS:
-                if seg_dist(x, y, pts[a][0], pts[a][1], pts[b][0], pts[b][1]) < lw / 2:
-                    color = EDGE
+                if seg_dist(x, y, pts[a][0], pts[a][1], pts[b][0], pts[b][1]) < lw * (0.8 if template else 0.5):
+                    color = (0, 0, 0) if template else EDGE
             for cx, cy, hub in pts:
                 w = (0.17 if hub else 0.12) * n
                 h = w * 1.4
                 if abs(x - cx) <= w / 2 and abs(y - cy) <= h / 2:
                     border = 0.025 * n
                     edge = abs(x - cx) > w / 2 - border or abs(y - cy) > h / 2 - border
+                    if template:
+                        color = (0, 0, 0) if (hub or edge) else None
+                        continue
                     color = GOLD if (hub or not edge) else (240, 236, 222)
                     if hub and not edge:
                         color = (60, 52, 30)
-            row[x] = (*color, 255)
+            if color is not None:
+                row[x] = (*color, 255)
 
     out = bytearray()
     for y in range(size):
@@ -97,10 +104,18 @@ def ico(images: list[tuple[int, bytes]]) -> bytes:
     return header + entries + blobs
 
 
+def icns(images: dict[int, bytes]) -> bytes:
+    """Apple icon file with PNG payloads (ic11=32, ic12=64, ic07=128, ic08=256, ic09=512)."""
+    kinds = {32: b"ic11", 64: b"ic12", 128: b"ic07", 256: b"ic08", 512: b"ic09"}
+    body = b"".join(kinds[s] + struct.pack(">I", 8 + len(d)) + d for s, d in sorted(images.items()))
+    return b"icns" + struct.pack(">I", 8 + len(body)) + body
+
+
 if __name__ == "__main__":
-    sizes = [16, 32, 48, 64, 128, 256]
-    images = [(s, png(s, render(s))) for s in sizes]
-    out = Path(__file__).with_name("graphmtg.ico")
-    out.write_bytes(ico(images))
-    Path(__file__).with_name("graphmtg-256.png").write_bytes(images[-1][1])
-    print(f"wrote {out} ({out.stat().st_size:,} bytes)")
+    here = Path(__file__).parent
+    pngs = {s: png(s, render(s)) for s in [16, 32, 48, 64, 128, 256, 512]}
+    (here / "graphmtg.ico").write_bytes(ico([(s, pngs[s]) for s in [16, 32, 48, 64, 128, 256]]))
+    (here / "graphmtg.icns").write_bytes(icns({s: pngs[s] for s in [32, 64, 128, 256, 512]}))
+    (here / "graphmtg-256.png").write_bytes(pngs[256])
+    (here / "graphmtg-menubar.png").write_bytes(png(44, render(44, template=True)))  # 22 pt @2x
+    print("wrote graphmtg.ico, graphmtg.icns, graphmtg-256.png, graphmtg-menubar.png")

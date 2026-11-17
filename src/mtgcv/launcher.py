@@ -1,13 +1,18 @@
-"""GraphMTG launcher: what GraphMTG.exe (and the `graphmtg` command) runs.
+"""GraphMTG launcher: what GraphMTG.exe, GraphMTG.app and the `graphmtg` command run.
 
 * If GraphMTG is already running, just opens the browser on it and exits.
 * Otherwise starts the server on 127.0.0.1 (preferred port, or any free one),
-  opens the browser once it responds, and keeps running until the window is closed
-  (or Ctrl+C).
+  opens the browser once it responds, and keeps running until the user quits.
 * The running port is recorded in <data dir>/server.json so a second launch finds it.
+
+Two front ends:
+* console (Windows exe, `graphmtg` in a terminal): close the window or Ctrl+C to quit.
+* menu bar (the macOS app, see macapp.py): a menu-bar icon with Open / Quit.
 
 Environment:
     GRAPHMTG_NO_BROWSER=1   don't open a browser (CI smoke test)
+    GRAPHMTG_MENUBAR=1      use the menu-bar front end outside the packaged app (macOS only)
+    GRAPHMTG_CONSOLE=1      force the console front end in the packaged macOS app (debugging)
     MTGCV_DATA_DIR / MTGCV_CACHE_DIR   as for `mtgcv serve`
 """
 
@@ -85,6 +90,35 @@ def _open_when_ready(port: int, url: str) -> None:
         time.sleep(0.1)
 
 
+def _write_state(port: int) -> Path:
+    state = _state_file()
+    state.write_text(json.dumps({"port": port, "pid": os.getpid(), "version": __version__}), encoding="utf-8")
+    return state
+
+
+def _clear_state(state: Path) -> None:
+    """Remove server.json if it is still ours (another instance may have replaced it)."""
+    try:
+        if json.loads(state.read_text(encoding="utf-8")).get("pid") == os.getpid():
+            state.unlink()
+    except (OSError, ValueError):
+        pass
+
+
+def _make_server(port: int):
+    import uvicorn
+
+    from mtgcv.server import create_app
+
+    return uvicorn.Server(uvicorn.Config(create_app(), host=HOST, port=port, log_level="warning"))
+
+
+def _use_menubar() -> bool:
+    if sys.platform != "darwin" or os.environ.get("GRAPHMTG_CONSOLE") == "1":
+        return False
+    return getattr(sys, "frozen", False) or os.environ.get("GRAPHMTG_MENUBAR") == "1"
+
+
 def _pause_if_double_clicked() -> None:
     """Keep the console open on errors so the message can be read."""
     if getattr(sys, "frozen", False) and sys.stdin and sys.stdin.isatty():
@@ -95,6 +129,10 @@ def _pause_if_double_clicked() -> None:
 
 
 def main() -> int:
+    if _use_menubar():
+        from mtgcv.macapp import run_menubar
+
+        return run_menubar()
     if hasattr(sys.stdout, "reconfigure"):
         # line_buffering: the startup message shows immediately even when output is redirected
         sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
@@ -108,8 +146,7 @@ def main() -> int:
 
         port = _pick_port()
         url = f"http://{HOST}:{port}"
-        state = _state_file()
-        state.write_text(json.dumps({"port": port, "pid": os.getpid(), "version": __version__}), encoding="utf-8")
+        state = _write_state(port)
 
         print(f"GraphMTG v{__version__} is running at {url}")
         print(f"Your collections are saved in: {default_data_dir()}")
@@ -117,18 +154,10 @@ def main() -> int:
 
         threading.Thread(target=_open_when_ready, args=(port, url), daemon=True).start()
 
-        import uvicorn
-
-        from mtgcv.server import create_app
-
         try:
-            uvicorn.run(create_app(), host=HOST, port=port, log_level="warning")
+            _make_server(port).run()
         finally:
-            try:
-                if json.loads(state.read_text(encoding="utf-8")).get("pid") == os.getpid():
-                    state.unlink()
-            except (OSError, ValueError):
-                pass
+            _clear_state(state)
         return 0
     except KeyboardInterrupt:
         return 0

@@ -41,10 +41,16 @@ _Last updated: 2026-11-16_
 
 - **Standalone Windows app** (D-021): `packaging/build_exe.ps1` → `dist\GraphMTG.exe`; launcher with single-instance,
   free-port and browser handling; version in sidebar; GitHub Actions release workflow (not yet run on GitHub).
+- **macOS app** (D-022): `packaging/build_mac.sh` → `dist/GraphMTG.app` + `GraphMTG-mac.zip` (Apple Silicon, unsigned).
+  Menu-bar front end in `src/mtgcv/macapp.py` (rumps); data in `~/Library/...`. Built and smoke-tested only in CI
+  (`mac` job); never run on a real Mac yet.
+- `make reset` / `make reset-cache` (`scripts/reset_data.py`) delete local data.
 
 ## Next / ideas
 - Run the release workflow once manually on GitHub (Actions → Build GraphMTG → Run workflow) before the first tag.
-- Optional: code signing (removes the SmartScreen warning), macOS build, native window (pywebview).
+  The macOS job has never run; check its smoke test and try the zip on a real Mac (Gatekeeper "Open Anyway" flow).
+- Optional: code signing (Windows SmartScreen) / Apple notarization ($99/yr Developer Program), Intel Mac build,
+  native window (pywebview).
 - Graph: the whole-library tag graph is one dense "hairball" (broad themes like Artifacts and Spellslinger
   connect everything). Options: lay out using only links at or above the current filter, or color nodes by theme or cluster.
   Ask the user before changing it.

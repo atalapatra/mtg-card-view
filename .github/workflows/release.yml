@@ -1,7 +1,7 @@
-# Builds GraphMTG.exe on Windows.
-#  * Push a tag vX.Y.Z (matching __version__ in src/mtgcv/__init__.py) -> test, build, smoke-test,
-#    and publish a GitHub Release with GraphMTG.exe attached.
-#  * "Run workflow" (manual) -> same build; the exe is kept as a downloadable workflow artifact only.
+# Builds GraphMTG.exe (Windows) and GraphMTG.app (macOS, Apple Silicon).
+#  * Push a tag vX.Y.Z (matching __version__ in src/mtgcv/__init__.py) -> test, build and smoke-test
+#    on both platforms, then publish a GitHub Release with GraphMTG.exe and GraphMTG-mac.zip attached.
+#  * "Run workflow" (manual) -> same builds; kept as downloadable workflow artifacts only.
 name: Build GraphMTG
 
 on:
@@ -74,12 +74,77 @@ jobs:
           name: GraphMTG-windows
           path: dist/GraphMTG.exe
 
+  mac:
+    runs-on: macos-latest # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Run tests
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pytest -q
+
+      - name: Build GraphMTG.app
+        run: bash packaging/build_mac.sh
+
+      - name: Smoke-test the app
+        run: |
+          export MTGCV_DATA_DIR="$RUNNER_TEMP/gm-data" MTGCV_CACHE_DIR="$RUNNER_TEMP/gm-cache" GRAPHMTG_NO_BROWSER=1
+          # Runs the real menu-bar front end (the bundle is frozen), so this also checks rumps starts.
+          dist/GraphMTG.app/Contents/MacOS/GraphMTG &
+          pid=$!
+          ok=0
+          for i in $(seq 1 120); do
+            if [ -f "$MTGCV_DATA_DIR/server.json" ]; then
+              port=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['port'])" "$MTGCV_DATA_DIR/server.json")
+              if curl -fs "http://127.0.0.1:$port/api/health" | grep -q '"graphmtg"' \
+                && curl -fs "http://127.0.0.1:$port/" | grep -q "<title>GraphMTG</title>"; then
+                ok=1; break
+              fi
+            fi
+            sleep 0.5
+          done
+          sleep 2
+          alive=0; kill -0 "$pid" 2>/dev/null && alive=1
+          kill "$pid" 2>/dev/null || true
+          echo "--- graphmtg.log"; cat "$MTGCV_DATA_DIR/graphmtg.log" || true
+          [ "$ok" = 1 ] || { echo "GraphMTG.app did not start and serve the UI"; exit 1; }
+          [ "$alive" = 1 ] || { echo "GraphMTG.app served the UI but then exited (menu bar failed?)"; exit 1; }
+          echo "GraphMTG.app started and served the UI"
+
+      - name: Upload app (workflow artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: GraphMTG-mac
+          path: dist/GraphMTG-mac.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts # one folder per artifact: artifacts/GraphMTG-windows, artifacts/GraphMTG-mac
+
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" dist/GraphMTG.exe `
-            --title "GraphMTG ${{ github.ref_name }}" `
+          gh release create "${{ github.ref_name }}" \
+            artifacts/GraphMTG-windows/GraphMTG.exe \
+            artifacts/GraphMTG-mac/GraphMTG-mac.zip \
+            --title "GraphMTG ${{ github.ref_name }}" \
             --notes-file packaging/RELEASE_NOTES.md

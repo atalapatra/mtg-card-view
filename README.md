@@ -6,23 +6,32 @@ draws your cards as a synergy graph. Group them by what they do, sort by popular
 
 The code, the `mtgcv` command and the data folders keep their original `mtg-card-view` / `mtgcv` names (D-020).
 
-## Download and run (Windows)
+## Download and run
 
-Download **GraphMTG.exe** from the repo's **Releases** page and double-click it. It opens in your browser, and a small
-console window stays open while it runs; close that window to quit. Windows may warn that the app is unrecognized
-(it isn't code-signed). Click **More info → Run anyway**. Collections are stored on your own computer (see
-"How it works" below). Nothing is uploaded anywhere.
+Get the app from the repo's **Releases** page. Collections are stored on your own computer (see "How it works"
+below). Nothing is uploaded anywhere.
+
+- **Windows:** download **GraphMTG.exe** and double-click it. It opens in your browser, and a small console window
+  stays open while it runs; close that window to quit. Windows may warn that the app is unrecognized (it isn't
+  code-signed). Click **More info → Run anyway**.
+- **Mac (Apple Silicon, macOS 11+):** download **GraphMTG-mac.zip**, unzip it, and drag **GraphMTG** into
+  Applications. The first time, macOS blocks it because it isn't notarized: open **System Settings → Privacy &
+  Security**, scroll down and click **Open Anyway**. GraphMTG opens in your browser and adds an icon to the menu
+  bar (top right) with **Open GraphMTG** and **Quit GraphMTG**.
 
 ## Releasing a new version
 
 1. Bump `__version__` in `src/mtgcv/__init__.py` (the only place the version lives).
 2. Commit, then tag and push: `git tag v0.2.0; git push origin v0.2.0`.
-3. The **Build GraphMTG** GitHub Actions workflow tests, builds and smoke-tests `GraphMTG.exe`, then publishes a
-   Release with it attached (notes from `packaging/RELEASE_NOTES.md`). Use **Run workflow** to build without
-   releasing.
+3. The **Build GraphMTG** GitHub Actions workflow tests, builds and smoke-tests `GraphMTG.exe` (Windows) and
+   `GraphMTG.app` (macOS), then publishes a Release with `GraphMTG.exe` and `GraphMTG-mac.zip` attached (notes from
+   `packaging/RELEASE_NOTES.md`). Use **Run workflow** to build without releasing.
 
-To build locally: `.\packaging\build_exe.ps1` → `dist\GraphMTG.exe` (~17 MB). It needs Node 22+ and the `.venv`.
-`graphmtg` (installed with the package) runs the same launcher without building an exe.
+To build locally (needs Node 22+ and the `.venv`):
+- Windows: `.\packaging\build_exe.ps1` → `dist\GraphMTG.exe` (~17 MB).
+- macOS (on a Mac): `bash packaging/build_mac.sh` → `dist/GraphMTG.app` and `dist/GraphMTG-mac.zip`.
+
+`graphmtg` (installed with the package) runs the same launcher without building an app.
 
 ## Setup (development)
 
@@ -102,8 +111,9 @@ and `#hashtags` are kept as `user_tags` (use `--group-by user_tag`).
   [`src/mtgcv/categories.py`](src/mtgcv/categories.py) (Ramp, Removal, Board Wipe, Card Advantage,
   Tutor, Protection, and others). Edit that file to tune the categories. The raw tags are still kept on every card.
 * Requests follow Scryfall's guidelines: a User-Agent header and at least 100 ms between requests.
-* Results are cached in `%LOCALAPPDATA%\mtg-card-view` (or `~/.cache/mtg-card-view`; override
-  with `MTGCV_CACHE_DIR`). Cards are re-fetched after 7 days. Tag data is checked for updates daily.
+* Results are cached in `%LOCALAPPDATA%\mtg-card-view` (macOS: `~/Library/Caches/mtg-card-view`; Linux:
+  `~/.cache/mtg-card-view`; override with `MTGCV_CACHE_DIR`). Collections are in `%APPDATA%\mtg-card-view` (macOS:
+  `~/Library/Application Support/mtg-card-view`; override with `MTGCV_DATA_DIR`). Cards are re-fetched after 7 days. Tag data is checked for updates daily.
 
 ## Layout
 

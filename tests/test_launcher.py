@@ -55,3 +55,54 @@ def test_health_endpoint(tmp_path, monkeypatch):
     app = create_app(store=DeckStore(tmp_path / "d.sqlite3"), client=make_client(tmp_path, []), web_dist=None)
     r = TestClient(app).get("/api/health")
     assert r.json() == {"app": "graphmtg", "version": __version__}
+
+
+def test_mac_data_and_cache_dirs(monkeypatch, tmp_path):
+    from mtgcv.cache import default_cache_dir
+    from mtgcv.store import default_data_dir
+
+    monkeypatch.delenv("MTGCV_DATA_DIR", raising=False)
+    monkeypatch.delenv("MTGCV_CACHE_DIR", raising=False)
+    monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    assert default_data_dir() == tmp_path / "Library" / "Application Support" / "mtg-card-view"
+    assert default_cache_dir() == tmp_path / "Library" / "Caches" / "mtg-card-view"
+    monkeypatch.setenv("MTGCV_DATA_DIR", str(tmp_path / "override"))
+    assert default_data_dir() == tmp_path / "override"
+
+
+def test_use_menubar(monkeypatch):
+    monkeypatch.delenv("GRAPHMTG_CONSOLE", raising=False)
+    monkeypatch.delenv("GRAPHMTG_MENUBAR", raising=False)
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr("sys.frozen", True, raising=False)
+    assert not launcher._use_menubar()
+    monkeypatch.setattr("sys.platform", "darwin")
+    assert launcher._use_menubar()
+    monkeypatch.setenv("GRAPHMTG_CONSOLE", "1")
+    assert not launcher._use_menubar()
+
+
+def test_server_runs_and_stops_in_background_thread(tmp_path, monkeypatch):
+    """The macOS app runs uvicorn off the main thread and stops it via should_exit."""
+    import threading
+    import time
+
+    monkeypatch.setenv("MTGCV_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("MTGCV_CACHE_DIR", str(tmp_path / "cache"))
+    port = launcher._pick_port()
+    state = launcher._write_state(port)
+    assert json.loads(state.read_text(encoding="utf-8"))["port"] == port
+    server = launcher._make_server(port)
+    t = threading.Thread(target=server.run, daemon=True)
+    t.start()
+    for _ in range(100):
+        if launcher._is_graphmtg(port):
+            break
+        time.sleep(0.05)
+    assert launcher._running_port() == port
+    server.should_exit = True
+    t.join(timeout=10)
+    assert not t.is_alive()
+    launcher._clear_state(state)
+    assert not state.exists()
