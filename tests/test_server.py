@@ -24,6 +24,17 @@ def api(tmp_path, monkeypatch):
     return TestClient(app)
 
 
+def test_import_manabox(api):
+    from pathlib import Path
+    csv_text = (Path(__file__).parent / "fixtures" / "manabox_sample.csv").read_text(encoding="utf-8")
+    r = api.post("/api/import/manabox", json={"csv": csv_text})
+    assert r.status_code == 200
+    assert "2 Sol Ring (TDC) 106" in r.json()["text"] and r.json()["skipped_tokens"] == 7
+    r = api.post("/api/import/manabox", json={"csv": csv_text, "include_lists": True})
+    assert "Rhystic Study" in r.json()["text"]
+    assert api.post("/api/import/manabox", json={"csv": "a,b\n1,2\n"}).status_code == 422
+
+
 def test_graph_endpoints(api):
     deck_id = api.post("/api/decks", json={"name": "D", "text": DECK}).json()["deck"]["id"]
     r = api.get(f"/api/decks/{deck_id}/graph", params={"mode": "tags"})

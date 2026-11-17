@@ -43,6 +43,7 @@ into the user's real saved decks.
 
 ```
 decklist.py    text list -> DeckEntry (qty, section, set, user_tags from [Archidekt] / #hashtags)
+importers.py   ManaBox CSV -> plain card-list text (binders ignored, tokens/lists excluded by default)
 scryfall.py    ScryfallClient (rate-limited, cached) + TagIndex (oracle tags w/ hierarchy & aliases)
 cache.py       SQLite card cache (7-day TTL) + tags bulk file (daily update check)
 categories.py  CATEGORIES: ordered list mapping tag slugs -> ~30 deck roles; order = primary priority

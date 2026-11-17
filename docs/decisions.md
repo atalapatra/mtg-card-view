@@ -167,3 +167,17 @@ Status: `Accepted`, `Proposed` (awaiting user), `Superseded by D-NNN`.
   cards get laid out.
 - Cards with no edges go on a sunflower-pattern ring outside the connected graph, most popular (EDHREC rank) innermost.
 - The edge filter in the toolbar (minimum themes / minimum synergy) only affects drawing, not layout.
+
+## D-018 · 2026-11-17 · Accepted
+**ManaBox CSV import: converted to the plain card-list text; binders ignored for now** (chosen by the user)
+
+- Supersedes the "paste text only" part of D-013. Paste still works, and a file can now be picked or dropped.
+- `src/mtgcv/importers.py` `manabox_to_decklist()` turns a ManaBox export into the same text a user would
+  paste: one `<qty> <name> (<SET>) <number>` line per card name. Rows for the same name (other printings, foils,
+  other binders) are summed, and the first printing is kept. The result goes through the normal `parse_decklist` path.
+- **Binder Name and Binder Type are intentionally not used** as deck boundaries or tags. The user said to leave them
+  out for now, but they're still in the CSV if we revisit this later.
+- Left out by default, each with a checkbox to include it: token cards (Set name ends in "Tokens") and
+  wishlist-type lists (`Binder Type = list`).
+- `POST /api/import/manabox` does the conversion and saves nothing. The UI fills the card-list box so the user can
+  review it before saving. The CLI auto-detects ManaBox CSVs (`--include-tokens`, `--include-lists`).

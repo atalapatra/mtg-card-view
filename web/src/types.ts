@@ -104,7 +104,18 @@ export interface DeckDetail {
 export type GroupMode = 'category' | 'primary' | 'type' | 'cmc' | 'color' | 'section' | 'user_tag' | 'none';
 export type SeedMode = 'primary' | 'type' | 'cmc' | 'color' | 'section' | 'user_tag' | 'empty';
 export type SortBy = 'edhrec' | 'name' | 'cmc' | 'price';
-export type ViewMode = 'board' | 'table' | 'grid' | 'graph';
+/** src/mtgcv/importers.py ImportResult */
+export interface ImportResult {
+  text: string;
+  rows: number;
+  cards: number;
+  unique: number;
+  skipped_tokens: number;
+  skipped_lists: number;
+  errors: string[];
+}
+
+export type ViewMode ='board' | 'table' | 'grid' | 'graph';
 
 // --- synergy graph (src/mtgcv/synergy.py Graph.to_dict, server.py /graph) ---
 export type GraphMode = 'tags' | 'edhrec';

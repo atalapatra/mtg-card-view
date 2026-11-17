@@ -17,6 +17,7 @@ from pathlib import Path
 
 from mtgcv.analyze import CardInfo, build_report, card_info, group_cards
 from mtgcv.decklist import DeckEntry, parse_decklist
+from mtgcv.importers import looks_like_manabox, manabox_to_decklist
 from mtgcv.scryfall import ScryfallClient
 
 GROUP_CHOICES = ["category", "primary", "type", "cmc", "color", "section", "user_tag", "none"]
@@ -57,7 +58,13 @@ def _print_report(report, group_by: str, sort_by: str, show_tags: bool) -> None:
 
 
 def cmd_analyze(args: argparse.Namespace) -> int:
-    text = sys.stdin.read() if args.decklist == "-" else Path(args.decklist).read_text(encoding="utf-8")
+    text = sys.stdin.read() if args.decklist == "-" else Path(args.decklist).read_text(encoding="utf-8-sig")
+    if looks_like_manabox(text):
+        imported = manabox_to_decklist(text, args.include_tokens, args.include_lists)
+        print(f"ManaBox CSV: {imported.cards} cards ({imported.unique} unique); left out "
+              f"{imported.skipped_tokens} tokens, {imported.skipped_lists} list/wishlist cards.",
+              file=sys.stderr)
+        text = imported.text
     parsed = parse_decklist(text)
     if not parsed.entries:
         print("No cards found in the deck list.", file=sys.stderr)
@@ -137,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("-s", "--sort", choices=SORT_CHOICES, default="edhrec")
     a.add_argument("-t", "--tags", action="store_true", help="Show raw Scryfall tags for each card")
     a.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH (- for stdout)")
+    a.add_argument("--include-tokens", action="store_true", help="ManaBox CSV: keep token cards")
+    a.add_argument("--include-lists", action="store_true", help="ManaBox CSV: keep wishlist-type lists")
     a.set_defaults(func=cmd_analyze)
 
     c = sub.add_parser("card", help="Show details and tags for a single card")

@@ -37,6 +37,7 @@ from mtgcv.analyze import GROUP_MODES, Report, build_report, group_cards
 from mtgcv.categories import CATEGORIES
 from mtgcv.decklist import parse_decklist
 from mtgcv.edhrec import EdhrecClient, EdhrecFetcher, edhrec_slug
+from mtgcv.importers import manabox_to_decklist
 from mtgcv.scryfall import ScryfallClient, TagIndex
 from mtgcv.store import DeckStore, NotFound
 from mtgcv.synergy import Graph, build_edhrec_graph, build_tag_graph, commander_hubs
@@ -82,6 +83,12 @@ class BoardIn(BaseModel):
 class BoardPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     layout: BoardLayout | None = None
+
+
+class ManaboxIn(BaseModel):
+    csv: str
+    include_tokens: bool = False
+    include_lists: bool = False
 
 
 GraphMode = Literal["tags", "edhrec"]
@@ -168,6 +175,14 @@ def create_app(store: DeckStore | None = None, client: ScryfallClient | None = N
     @app.post("/api/analyze")
     def analyze(body: AnalyzeIn) -> dict:
         return analyzer.report(body.text).to_api_dict()
+
+    @app.post("/api/import/manabox")
+    def import_manabox(body: ManaboxIn) -> dict:
+        """Convert a ManaBox CSV export to the plain card-list text (nothing is saved)."""
+        try:
+            return manabox_to_decklist(body.csv, body.include_tokens, body.include_lists).to_dict()
+        except ValueError as e:
+            raise HTTPException(422, str(e))
 
     @app.get("/api/decks")
     def list_decks() -> list[dict]:

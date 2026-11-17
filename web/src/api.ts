@@ -1,4 +1,14 @@
-import type { Board, BoardLayout, DeckDetail, DeckSummary, GraphMode, GraphResponse, Positions, SeedMode } from './types';
+import type {
+  Board,
+  BoardLayout,
+  DeckDetail,
+  DeckSummary,
+  GraphMode,
+  GraphResponse,
+  ImportResult,
+  Positions,
+  SeedMode,
+} from './types';
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -31,6 +41,8 @@ export const api = {
   updateBoard: (id: number, patch: { name?: string; layout?: BoardLayout }) =>
     req<Board>('PATCH', `/api/boards/${id}`, patch),
   deleteBoard: (id: number) => req<void>('DELETE', `/api/boards/${id}`),
+  importManabox: (csv: string, include_tokens: boolean, include_lists: boolean) =>
+    req<ImportResult>('POST', '/api/import/manabox', { csv, include_tokens, include_lists }),
   getGraph: (deckId: number, mode: GraphMode) => req<GraphResponse>('GET', `/api/decks/${deckId}/graph?mode=${mode}`),
   saveGraphLayout: (deckId: number, mode: GraphMode, positions: Positions) =>
     req<void>('PUT', `/api/decks/${deckId}/graph-layout/${mode}`, { positions }),

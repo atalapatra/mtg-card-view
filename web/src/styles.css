@@ -1033,3 +1033,21 @@ code {
   font-size: 11px;
   text-align: right;
 }
+
+/* --- import ----------------------------------------------------------------------------- */
+.import-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.deck-form label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.import-summary {
+  color: var(--ok);
+  margin: 0;
+}

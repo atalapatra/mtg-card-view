@@ -25,7 +25,10 @@ _Last updated: 2026-11-16_
   and mode), Reset back to the original deterministic layout, unconnected cards in an outer ring, search highlights
   matches, hovering or selecting a card highlights its links, and the detail panel lists "Synergy links".
   Verified with a 2,000-card list: about 3 s to a ready graph, plus about 106 s once to download about 200 EDHREC pages.
-- Tests: 20 offline pytest tests (parser, client, tags, analysis, API, synergy, EDHREC)
+- **ManaBox CSV import** (D-018): an "Import ManaBox CSV…" button and file drop in the deck dialog convert
+  the export to a plain card list for review. Tokens and wishlist lists are left out by default, with
+  checkboxes to include them. The CLI auto-detects ManaBox CSVs. Binder information is not used yet.
+- Tests: 26 offline pytest tests (parser, client, tags, analysis, API, synergy, EDHREC, ManaBox import)
 - Verified manually: a live run against Scryfall, plus a headless-Edge CDP script that performs a real mouse
   drag between groups and confirms it persisted (the script lived in the session scratchpad and is not in the repo)
 
@@ -42,6 +45,9 @@ _Last updated: 2026-11-16_
 - Category tuning against more real decks (e.g. Delver of Secrets is Uncategorized)
 - Show Tagger `annotation` text; a tag-hierarchy tree or filter using `TagIndex.parents`
 - Export a custom grouping back to text (e.g. Archidekt `[Category]` format)
+
+- ManaBox binders/decks (Binder Name / Binder Type) could later become tags or separate decks. The user
+  deferred this (D-018).
 
 ## Open questions
 - Nothing committed to git yet. Waiting on the user.
