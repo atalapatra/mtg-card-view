@@ -29,6 +29,7 @@ export interface Card {
   commander_legal: boolean | null;
   price_usd: number | null;
   image_normal: string | null;
+  image_small: string | null;
   image_art_crop: string | null;
   image_back: string | null;
   scryfall_uri: string | null;
@@ -103,7 +104,43 @@ export interface DeckDetail {
 export type GroupMode = 'category' | 'primary' | 'type' | 'cmc' | 'color' | 'section' | 'user_tag' | 'none';
 export type SeedMode = 'primary' | 'type' | 'cmc' | 'color' | 'section' | 'user_tag' | 'empty';
 export type SortBy = 'edhrec' | 'name' | 'cmc' | 'price';
-export type ViewMode = 'board' | 'table' | 'grid';
+/** src/mtgcv/importers.py ImportResult */
+export interface ImportResult {
+  text: string;
+  rows: number;
+  cards: number;
+  unique: number;
+  skipped_tokens: number;
+  skipped_lists: number;
+  errors: string[];
+}
+
+export type ViewMode ='board' | 'table' | 'grid' | 'graph';
+
+// --- synergy graph (src/mtgcv/synergy.py Graph.to_dict, server.py /graph) ---
+export type GraphMode = 'tags' | 'edhrec';
+
+export interface GraphData {
+  mode: GraphMode;
+  nodes: string[]; // card keys
+  hubs: string[]; // commander card keys (edhrec mode)
+  edges: [number, number, number, number][]; // [sourceIdx, targetIdx, rawWeight, labelIdx | -1]
+  labels: string[];
+  unconnected: number;
+  meta: { themes?: string[]; commanders?: number; missing_pages?: string[] };
+}
+
+export type Positions = Record<string, [number, number]>;
+
+export type GraphResponse =
+  | { status: 'loading'; progress: { done: number; total: number } }
+  | { status: 'ready'; graph: GraphData; layout: Positions | null };
+
+export interface Connection {
+  key: string;
+  label: string;
+  weight: number; // raw
+}
 
 export const GROUP_LABELS: Record<GroupMode, string> = {
   category: 'Category (all)',

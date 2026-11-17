@@ -19,12 +19,23 @@ cd web; npm install; npm run build; cd ..   # one-time: build the frontend
 mtgcv serve --open                          # http://127.0.0.1:8000
 ```
 
-- Paste a deck list with **+ New deck**. Decks are saved in `%APPDATA%\mtg-card-view\decks.sqlite3`.
+- Paste a deck list with **+ New deck**. To load a **ManaBox** collection export, click **Import ManaBox CSV…** or drop
+  the `.csv` file on the card list. It becomes a normal card list you can review before saving. Tokens and wishlist
+  lists are left out unless you tick their checkboxes. Decks are saved in `%APPDATA%\mtg-card-view\decks.sqlite3`.
 - Switch between **Board**, **Table**, and **Images** views. Group by category, type, mana value, color, and more. Sort by EDHREC rank, name, MV, or price.
   Filter by name, rules text, or tag.
 - Choose **Group by → + New custom grouping…** to make your own groups, then drag cards between them in the Board view.
   Changes save automatically.
 - Click a card to see its details: EDHREC rank, categories, and every Scryfall tag (★ marks cards Tagger considers defining examples of a tag).
+- **Graph** view: cards as images in a synergy network. Two weightings are available:
+  - **Scryfall tag synergy** links payoffs to enablers (e.g. "lifegain matters" ↔ lifegain cards; see `THEMES` in
+    `src/mtgcv/synergy.py`).
+  - **EDHREC commander synergy** links every legendary creature in the list to the cards EDHREC says over-perform
+    with it. The first use downloads each commander's EDHREC page, about 0.5 s each, then caches it for a week.
+
+  Drag cards to arrange them; the layout is saved per deck. **Reset layout** returns to the original arrangement.
+  Scroll to zoom and double-click empty space to fit. Hover or click a card to highlight its links. The search box
+  highlights matching cards. It works with whole collections (tested with 2,000 cards).
 
 For frontend development, run `mtgcv serve` and `cd web; npm run dev` (http://localhost:5173, hot reload).
 
@@ -42,6 +53,9 @@ mtgcv refresh-tags                                      # force re-download of t
 Group modes: `category` (a card appears in every category it fits), `primary` (one category
 per card), `type`, `cmc`, `color`, `section`, `user_tag`, `none`.
 Sort modes: `edhrec` (most-played first), `name`, `cmc`, `price`.
+
+`mtgcv analyze ManaBox_Collection.csv` also works. ManaBox CSVs are detected automatically, and
+`--include-tokens` / `--include-lists` keep the entries that are left out by default.
 
 ### Deck list formats
 

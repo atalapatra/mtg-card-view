@@ -1,8 +1,12 @@
 """API tests: FastAPI TestClient + mocked Scryfall (no network)."""
 
+import time
+
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from mtgcv.edhrec import EdhrecClient
 from mtgcv.server import create_app
 from mtgcv.store import DeckStore
 from test_scryfall_and_analyze import make_client
@@ -13,9 +17,51 @@ DECK = "Commander\n1 Sol Ring\nDeck\n1 Swords to Plowshares\n1 Wrath of God\n2 L
 @pytest.fixture
 def api(tmp_path, monkeypatch):
     monkeypatch.setattr("mtgcv.scryfall.MIN_INTERVAL", 0)
+    edhrec_http = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(404)))
     app = create_app(store=DeckStore(tmp_path / "decks.sqlite3"),
-                     client=make_client(tmp_path, []), web_dist=None)
+                     client=make_client(tmp_path, []), web_dist=None,
+                     edhrec=EdhrecClient(cache_dir=tmp_path, http=edhrec_http, interval=0))
     return TestClient(app)
+
+
+def test_import_manabox(api):
+    from pathlib import Path
+    csv_text = (Path(__file__).parent / "fixtures" / "manabox_sample.csv").read_text(encoding="utf-8")
+    r = api.post("/api/import/manabox", json={"csv": csv_text})
+    assert r.status_code == 200
+    assert "2 Sol Ring (TDC) 106" in r.json()["text"] and r.json()["skipped_tokens"] == 7
+    r = api.post("/api/import/manabox", json={"csv": csv_text, "include_lists": True})
+    assert "Rhystic Study" in r.json()["text"]
+    assert api.post("/api/import/manabox", json={"csv": "a,b\n1,2\n"}).status_code == 422
+
+
+def test_graph_endpoints(api):
+    deck_id = api.post("/api/decks", json={"name": "D", "text": DECK}).json()["deck"]["id"]
+    r = api.get(f"/api/decks/{deck_id}/graph", params={"mode": "tags"})
+    assert r.status_code == 200 and r.json()["status"] == "ready"
+    g = r.json()["graph"]
+    assert len(g["nodes"]) == 5 and r.json()["layout"] is None
+
+    # EDHREC mode: the Commander-section card is a hub; its page is fetched in the
+    # background (mock returns 404), so poll until ready.
+    r = api.get(f"/api/decks/{deck_id}/graph", params={"mode": "edhrec"})
+    for _ in range(50):
+        if r.json()["status"] == "ready":
+            break
+        assert r.json()["progress"]["total"] == 1
+        time.sleep(0.05)
+        r = api.get(f"/api/decks/{deck_id}/graph", params={"mode": "edhrec"})
+    g = r.json()["graph"]
+    assert g["hubs"] == ["commander:Sol Ring"] and g["meta"]["missing_pages"] == ["Sol Ring"]
+    assert g["edges"] == []
+    assert api.get(f"/api/decks/{deck_id}/graph", params={"mode": "bogus"}).status_code == 422
+
+    pos = {"main:Wrath of God": [1.5, -2.0]}
+    assert api.put(f"/api/decks/{deck_id}/graph-layout/tags", json={"positions": pos}).status_code == 204
+    assert api.get(f"/api/decks/{deck_id}/graph", params={"mode": "tags"}).json()["layout"] == pos
+    assert api.delete(f"/api/decks/{deck_id}/graph-layout/tags").status_code == 204
+    assert api.get(f"/api/decks/{deck_id}/graph", params={"mode": "tags"}).json()["layout"] is None
+    assert api.put("/api/decks/999/graph-layout/tags", json={"positions": pos}).status_code == 404
 
 
 def test_analyze(api):

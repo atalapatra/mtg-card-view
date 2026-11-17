@@ -7,7 +7,19 @@ import { GridView } from './components/GridView';
 import { usePreview } from './components/HoverPreview';
 import { ColorPips } from './components/Symbols';
 import { TableView } from './components/TableView';
-import type { BoardLayout, Card, DeckDetail, DeckSummary, GroupMode, SeedMode, SortBy, ViewGroup, ViewMode } from './types';
+import { GraphView } from './graph/GraphView';
+import type {
+  BoardLayout,
+  Card,
+  Connection,
+  DeckDetail,
+  DeckSummary,
+  GroupMode,
+  SeedMode,
+  SortBy,
+  ViewGroup,
+  ViewMode,
+} from './types';
 import { GROUP_LABELS, SORT_LABELS, UNSORTED_ID } from './types';
 import * as ops from './util';
 import { formatRank, matchesSearch, sortCards } from './util';
@@ -45,7 +57,8 @@ export default function App() {
   const [detail, setDetail] = useState<DeckDetail | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = usePersisted<ViewMode>('view', 'board', ['board', 'table', 'grid']);
+  const [view, setView] = usePersisted<ViewMode>('view', 'board', ['board', 'table', 'grid', 'graph']);
+  const [connections, setConnections] = useState<Map<string, Connection[]> | null>(null);
   const [sort, setSort] = usePersisted<SortBy>('sort', 'edhrec', ['edhrec', 'name', 'cmc', 'price']);
   const [grouping, setGrouping] = useState('auto:category'); // "auto:<mode>" | "board:<id>"
   const [search, setSearch] = useState('');
@@ -227,6 +240,8 @@ export default function App() {
 
   const selectedCard = selectedKey ? cardsByKey.get(selectedKey) : undefined;
   const select = (c: Card) => setSelectedKey((k) => (k === c.key ? null : c.key));
+  const searchFn = useCallback((c: Card) => matchesSearch(c, search), [search]);
+  const isGraph = view === 'graph';
   const colorize = grouping === 'auto:category' || grouping === 'auto:primary' || !!board;
 
   // --- render ---------------------------------------------------------------------
@@ -255,7 +270,7 @@ export default function App() {
         </p>
       </nav>
 
-      <main className="main">
+      <main className={`main${isGraph && detail ? ' graph-mode' : ''}`}>
         {error && (
           <div className="banner error">
             {error}
@@ -321,13 +336,15 @@ export default function App() {
 
             <div className="toolbar">
               <div className="segmented" role="tablist" aria-label="View">
-                {(['board', 'table', 'grid'] as ViewMode[]).map((v) => (
+                {(['board', 'table', 'grid', 'graph'] as ViewMode[]).map((v) => (
                   <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
-                    {v === 'board' ? 'Board' : v === 'table' ? 'Table' : 'Images'}
+                    {{ board: 'Board', table: 'Table', grid: 'Images', graph: 'Graph' }[v]}
                   </button>
                 ))}
               </div>
 
+              {!isGraph && (
+              <>
               <label className="field">
                 Group by
                 <select
@@ -362,16 +379,18 @@ export default function App() {
                   ))}
                 </select>
               </label>
+              </>
+              )}
 
               <input
                 className="search"
                 type="search"
-                placeholder="Filter by name, text, tag…"
+                placeholder={isGraph ? 'Highlight by name, text, tag…' : 'Filter by name, text, tag…'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
 
-              {board && (
+              {board && !isGraph && (
                 <div className="board-actions">
                   <span className={`save-state ${saveState}`}>
                     {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : ''}
@@ -384,10 +403,10 @@ export default function App() {
               )}
             </div>
 
-            {board && view !== 'board' && (
+            {board && view !== 'board' && !isGraph && (
               <p className="hint">Switch to Board view to drag cards between groups.</p>
             )}
-            {grouping === 'auto:category' && (
+            {grouping === 'auto:category' && !isGraph && (
               <p className="hint">Cards appear in every category they fit. Use “Primary category” to show each card once.</p>
             )}
 
@@ -399,6 +418,17 @@ export default function App() {
                 <TableView groups={groups} selectedKey={selectedKey} onSelect={select} sort={sort} onSort={setSort} />
               )}
               {view === 'grid' && <GridView groups={groups} selectedKey={selectedKey} onSelect={select} />}
+              {isGraph && (
+                <GraphView
+                  deckId={detail.deck.id}
+                  cardsByKey={cardsByKey}
+                  search={searchFn}
+                  searchActive={search.trim().length > 0}
+                  selectedKey={selectedKey}
+                  onSelect={(c) => setSelectedKey(c ? c.key : null)}
+                  onConnections={setConnections}
+                />
+              )}
             </div>
           </>
         )}
@@ -410,6 +440,9 @@ export default function App() {
           tagDescriptions={detail.report.tag_descriptions}
           onClose={() => setSelectedKey(null)}
           onSearch={setSearch}
+          connections={isGraph ? (connections?.get(selectedCard.key) ?? []) : undefined}
+          cardsByKey={cardsByKey}
+          onSelectKey={setSelectedKey}
         />
       )}
 

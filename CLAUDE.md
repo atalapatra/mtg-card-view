@@ -19,8 +19,8 @@ dragged and dropped into custom groupings.
 - @docs/status.md: what's built, what's next, open questions. Update at the end of meaningful work.
 - @docs/decisions.md: decision log. Append an entry whenever a design or technical decision is made
   (by the user or agreed with them). Never rewrite past entries. Supersede them with a new one.
-- `docs/scryfall-notes.md`: verified findings about Scryfall's API and bulk data formats. Check here
-  before probing the API again, and add any new findings.
+- `docs/scryfall-notes.md` / `docs/edhrec-notes.md`: verified findings about Scryfall's API and bulk data,
+  and EDHREC's unofficial JSON. Check here before probing the APIs again, and add any new findings.
 
 ## Commands (Windows / PowerShell)
 
@@ -43,13 +43,16 @@ into the user's real saved decks.
 
 ```
 decklist.py    text list -> DeckEntry (qty, section, set, user_tags from [Archidekt] / #hashtags)
+importers.py   ManaBox CSV -> plain card-list text (binders ignored, tokens/lists excluded by default)
 scryfall.py    ScryfallClient (rate-limited, cached) + TagIndex (oracle tags w/ hierarchy & aliases)
 cache.py       SQLite card cache (7-day TTL) + tags bulk file (daily update check)
 categories.py  CATEGORIES: ordered list mapping tag slugs -> ~30 deck roles; order = primary priority
 analyze.py     CardInfo dataclass, build_report, group_cards, sort_cards, summarize
 cli.py         argparse CLI (`mtgcv` entry point)
-store.py       DeckStore: SQLite decks + boards (custom groupings) in the data dir
-server.py      FastAPI app (create_app) — /api/decks, /api/boards, /api/analyze; serves web/dist
+store.py       DeckStore: SQLite decks + boards (custom groupings) + graph_layouts in the data dir
+server.py      FastAPI app (create_app) — /api/decks, /api/boards, /api/analyze, /api/decks/{id}/graph; serves web/dist
+edhrec.py      EdhrecClient (unofficial JSON, cached, 0.5 s/request) + EdhrecFetcher (background jobs)
+synergy.py     THEMES (payoff <-> enabler), build_tag_graph, build_edhrec_graph, commander_hubs
 
 web/src/
   types.ts       TS mirror of CardInfo / Report.to_api_dict / deck + board shapes
@@ -57,7 +60,11 @@ web/src/
   util.ts        client-side sort/filter, symbol URLs, pure board ops (moveCard, addGroup…)
   App.tsx        state: decks, current deck, view, grouping ("auto:<mode>" | "board:<id>"), sort, search
   components/    BoardView (dnd-kit), TableView, GridView, CardDetail, Dialogs, HoverPreview, Symbols
+  graph/         GraphView (fetch/poll, layout, save, reset), GraphCanvas (canvas renderer), layoutWorker (d3-force)
 ```
+
+Scale target: a whole collection (thousands of cards) must stay usable in every view. Avoid O(n²) work per
+render, keep heavy computation server-side or in workers, and cap graph edges per card.
 
 Data contract: `CardInfo` fields and `Report.to_api_dict()` are mirrored in `web/src/types.ts`. **Change
 both together.** Grouping logic lives only in Python (the API returns membership for every mode).

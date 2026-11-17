@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import type { SeedMode } from '../types';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { api } from '../api';
+import type { ImportResult, SeedMode } from '../types';
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
@@ -63,6 +64,45 @@ export function DeckEditor({
   const [text, setText] = useState(initialText);
   const suggested = guessName(text);
 
+  // ManaBox CSV import: converted server-side into the same text format as a paste.
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [csv, setCsv] = useState<{ text: string; file: string } | null>(null);
+  const [includeTokens, setIncludeTokens] = useState(false);
+  const [includeLists, setIncludeLists] = useState(false);
+  const [imported, setImported] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const convert = async (csvText: string, file: string, tokens: boolean, lists: boolean) => {
+    setImporting(true);
+    setImportError(null);
+    try {
+      const r = await api.importManabox(csvText, tokens, lists);
+      setCsv({ text: csvText, file });
+      setImported(r);
+      setText(r.text);
+      setName((n) => n || file.replace(/\.csv$/i, '').replace(/[_]+/g, ' '));
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const readFile = async (file: File | undefined) => {
+    if (!file) return;
+    const content = await file.text();
+    if (/\.csv$/i.test(file.name) || /^﻿?[^\n]*\bQuantity\b/.test(content)) {
+      await convert(content, file.name, includeTokens, includeLists);
+    } else {
+      // Plain text deck list file: use as-is.
+      setCsv(null);
+      setImported(null);
+      setText(content);
+      setName((n) => n || file.name.replace(/\.[^.]+$/, ''));
+    }
+  };
+
   return (
     <Modal title={isNew ? 'New deck' : 'Edit deck'} onClose={onClose}>
       <form
@@ -76,11 +116,69 @@ export function DeckEditor({
           Name
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={suggested || 'Untitled deck'} />
         </label>
+        <div className="import-row">
+          <button type="button" onClick={() => fileInput.current?.click()} disabled={importing}>
+            {importing ? 'Importing…' : 'Import ManaBox CSV…'}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".csv,.txt,text/csv,text/plain"
+            hidden
+            onChange={(e) => {
+              readFile(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={includeTokens}
+              onChange={(e) => {
+                setIncludeTokens(e.target.checked);
+                if (csv) convert(csv.text, csv.file, e.target.checked, includeLists);
+              }}
+            />
+            Include tokens
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={includeLists}
+              onChange={(e) => {
+                setIncludeLists(e.target.checked);
+                if (csv) convert(csv.text, csv.file, includeTokens, e.target.checked);
+              }}
+            />
+            Include wishlist lists
+          </label>
+        </div>
+        {imported && csv && (
+          <p className="hint import-summary">
+            {csv.file}: {imported.cards.toLocaleString()} cards ({imported.unique.toLocaleString()} unique) imported
+            {(imported.skipped_tokens > 0 || imported.skipped_lists > 0) &&
+              ` · left out ${[
+                imported.skipped_tokens > 0 && `${imported.skipped_tokens} tokens`,
+                imported.skipped_lists > 0 && `${imported.skipped_lists} wishlist-list cards`,
+              ]
+                .filter(Boolean)
+                .join(' and ')}`}
+            {imported.errors.length > 0 && ` · ${imported.errors.length} rows skipped`}
+          </p>
+        )}
+        {importError && <p className="warn">{importError}</p>}
         <label>
           Card list
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              if (e.dataTransfer.files.length) {
+                e.preventDefault();
+                readFile(e.dataTransfer.files[0]);
+              }
+            }}
             placeholder={PLACEHOLDER}
             rows={18}
             spellCheck={false}
@@ -88,8 +186,8 @@ export function DeckEditor({
           />
         </label>
         <p className="hint">
-          Accepts plain, Moxfield, MTGA and Archidekt exports. Archidekt <code>[Categories]</code> and{' '}
-          <code>#tags</code> become “Your tags”.
+          Paste a list or drop a file here. Accepts plain, Moxfield, MTGA and Archidekt lists, and ManaBox CSV
+          exports. Archidekt <code>[Categories]</code> and <code>#tags</code> become “Your tags”.
         </p>
         <footer className="modal-foot">
           {onDelete && (
