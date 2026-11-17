@@ -18,12 +18,15 @@ import type {
   GroupMode,
   SeedMode,
   SortBy,
+  Filters,
+  GraphMode,
   ViewGroup,
   ViewMode,
 } from './types';
-import { GROUP_LABELS, SORT_LABELS, UNSORTED_ID } from './types';
+import { EMPTY_FILTERS, GROUP_LABELS, SORT_LABELS, UNSORTED_ID } from './types';
 import * as ops from './util';
-import { formatRank, matchesSearch, sortCards } from './util';
+import { activeFilterCount, matchesFilters, matchesSearch, sortCards } from './util';
+import { FilterBar } from './components/FilterBar';
 
 const LAST_DECK_KEY = 'mtgcv.lastDeck';
 
@@ -58,7 +61,11 @@ export default function App() {
   const [detail, setDetail] = useState<DeckDetail | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = usePersisted<ViewMode>('view', 'board', ['board', 'table', 'grid', 'graph']);
+  // Graph is the main view: the app always opens on it (D-020).
+  const [view, setView] = useState<ViewMode>('graph');
+  const [graphMode, setGraphMode] = useState<GraphMode>('tags'); // default: Scryfall tag synergy
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
   const [connections, setConnections] = useState<Map<string, Connection[]> | null>(null);
   const [sort, setSort] = usePersisted<SortBy>('sort', 'edhrec', ['edhrec', 'name', 'cmc', 'price']);
   const [grouping, setGrouping] = useState('auto:category'); // "auto:<mode>" | "board:<id>"
@@ -132,10 +139,10 @@ export default function App() {
   }, [view]);
 
   // --- deck actions -----------------------------------------------------------
-  const openDeck = (id: number) => run('Loading deck…', async () => showDeck(await api.getDeck(id)));
+  const openDeck = (id: number) => run('Loading collection…', async () => showDeck(await api.getDeck(id)));
 
   const createDeck = (name: string, text: string) =>
-    run('Analyzing deck… (the first run downloads Scryfall tag data)', async () => {
+    run('Analyzing collection… (the first run downloads Scryfall tag data)', async () => {
       const d = await api.createDeck(name, text);
       showDeck(d);
       setGrouping('auto:category');
@@ -152,17 +159,21 @@ export default function App() {
       setDecks(await api.listDecks());
     });
 
-  const deleteDeck = () => {
-    if (!detail || !confirm(`Delete “${detail.deck.name}” and its custom groupings?`)) return;
+  const deleteCollection = (id: number, name: string) => {
+    if (!confirm(`Delete the collection “${name}”? Its custom groupings and graph layouts are deleted too. This can't be undone.`))
+      return;
     run('Deleting…', async () => {
-      await api.deleteDeck(detail.deck.id);
+      await api.deleteDeck(id);
       setDialog(null);
       const list = await api.listDecks();
       setDecks(list);
-      if (list[0]) showDeck(await api.getDeck(list[0].id));
-      else setDetail(null);
+      if (detail?.deck.id === id) {
+        if (list[0]) showDeck(await api.getDeck(list[0].id));
+        else setDetail(null);
+      }
     });
   };
+  const deleteDeck = () => detail && deleteCollection(detail.deck.id, detail.deck.name);
 
   // --- custom groupings (boards) -------------------------------------------------
   const board =
@@ -232,7 +243,9 @@ export default function App() {
     if (!detail) return [];
     const visible = (keys: string[]) =>
       sortCards(
-        keys.map((k) => cardsByKey.get(k)).filter((c): c is Card => !!c && matchesSearch(c, search)),
+        keys
+          .map((k) => cardsByKey.get(k))
+          .filter((c): c is Card => !!c && matchesSearch(c, search) && matchesFilters(c, filters)),
         sort,
       );
 
@@ -247,7 +260,7 @@ export default function App() {
     return (detail.report.groupings[mode] ?? [])
       .map((g, i) => ({ id: `auto-${i}`, name: g.name, cards: visible(g.cards), editable: false }))
       .filter((g) => g.cards.length > 0);
-  }, [detail, board, grouping, search, sort, cardsByKey]);
+  }, [detail, board, grouping, search, sort, cardsByKey, filters]);
 
   const selectedCard = selectedKey ? cardsByKey.get(selectedKey) : undefined;
   const select = (c: Card) => {
@@ -269,6 +282,13 @@ export default function App() {
     setPairKey(key);
   };
   const searchFn = useCallback((c: Card) => matchesSearch(c, search), [search]);
+  const filterFn = useCallback((c: Card) => matchesFilters(c, filters), [filters]);
+  const filterCount = activeFilterCount(filters);
+  const filteredTotal = useMemo(
+    () => (detail ? detail.report.cards.filter((c) => matchesFilters(c, filters)).length : 0),
+    [detail, filters],
+  );
+  const categoryNames = useMemo(() => Object.keys(detail?.report.summary.category_counts ?? {}), [detail]);
   const isGraph = view === 'graph';
   const colorize = grouping === 'auto:category' || grouping === 'auto:primary' || !!board;
 
@@ -278,16 +298,25 @@ export default function App() {
   return (
     <div className={`app${pairCard ? ' with-pair' : selectedCard ? ' with-detail' : ''}`}>
       <nav className="sidebar">
-        <div className="brand">MTG Card View</div>
+        <div className="brand">GraphMTG</div>
         <button className="primary new-deck" onClick={() => setDialog('newDeck')}>
-          + New deck
+          + New collection
         </button>
+        <div className="sidebar-label">Collections</div>
         <ul className="deck-list">
           {decks.map((d) => (
             <li key={d.id}>
               <button className={d.id === detail?.deck.id ? 'active' : ''} onClick={() => openDeck(d.id)}>
                 <span className="deck-name">{d.name}</span>
                 <span className="muted">{d.card_count}</span>
+              </button>
+              <button
+                className="icon danger deck-delete"
+                title={`Delete “${d.name}”`}
+                aria-label={`Delete ${d.name}`}
+                onClick={() => deleteCollection(d.id, d.name)}
+              >
+                ×
               </button>
             </li>
           ))}
@@ -311,13 +340,12 @@ export default function App() {
         {!detail ? (
           !busy && (
             <div className="empty-state">
-              <h1>Analyze a card list</h1>
+              <h1>Welcome to GraphMTG</h1>
               <p>
-                Paste a deck list to see each card's role, Scryfall tags and EDHREC rank — then group, sort and organize
-                it.
+                Paste a card list or import a ManaBox export to see how your cards work together: a synergy graph, each card's role, Scryfall tags and EDHREC rank.
               </p>
               <button className="primary" onClick={() => setDialog('newDeck')}>
-                Paste a deck list
+                New collection
               </button>
             </div>
           )
@@ -327,6 +355,9 @@ export default function App() {
               <div className="deck-title">
                 <h1>{detail.deck.name}</h1>
                 <button onClick={() => setDialog('editDeck')}>Edit list</button>
+                <button className="danger" onClick={deleteDeck}>
+                  Delete
+                </button>
               </div>
               {s && (
                 <div className="summary">
@@ -334,11 +365,6 @@ export default function App() {
                   <Stat label="Lands" value={`${s.lands}`} />
                   <Stat label="Avg MV" value={`${s.average_cmc_nonland}`} hint="Average mana value of nonland cards" />
                   <Stat label="Identity" value={<ColorPips colors={s.color_identity} />} />
-                  <Stat
-                    label="Median rank"
-                    value={formatRank(s.median_edhrec_rank)}
-                    hint="Median EDHREC rank of the cards (lower = more popular)"
-                  />
                   <Stat
                     label="Game Changers"
                     value={`${s.game_changers.length}`}
@@ -364,7 +390,7 @@ export default function App() {
 
             <div className="toolbar">
               <div className="segmented" role="tablist" aria-label="View">
-                {(['board', 'table', 'grid', 'graph'] as ViewMode[]).map((v) => (
+                {(['graph', 'board', 'table', 'grid'] as ViewMode[]).map((v) => (
                   <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
                     {{ board: 'Board', table: 'Table', grid: 'Images', graph: 'Graph' }[v]}
                   </button>
@@ -418,6 +444,14 @@ export default function App() {
                 onChange={(e) => setSearch(e.target.value)}
               />
 
+              <button
+                className={`filters-btn${showFilters || filterCount ? ' on' : ''}`}
+                onClick={() => setShowFilters((v) => !v)}
+                aria-expanded={showFilters}
+              >
+                Filters{filterCount > 0 && <span className="badge">{filterCount}</span>}
+              </button>
+
               {board && !isGraph && (
                 <div className="board-actions">
                   <span className={`save-state ${saveState}`}>
@@ -430,6 +464,16 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {showFilters && (
+              <FilterBar
+                filters={filters}
+                onChange={setFilters}
+                categories={categoryNames}
+                shown={filteredTotal}
+                total={detail.report.cards.length}
+              />
+            )}
 
             {board && view !== 'board' && !isGraph && (
               <p className="hint">Switch to Board view to drag cards between groups.</p>
@@ -452,6 +496,10 @@ export default function App() {
                   cardsByKey={cardsByKey}
                   search={searchFn}
                   searchActive={search.trim().length > 0}
+                  filter={filterFn}
+                  filterActive={filterCount > 0}
+                  mode={graphMode}
+                  onModeChange={setGraphMode}
                   selectedKey={selectedKey}
                   pairKey={pairKey}
                   onSelect={(c) => {

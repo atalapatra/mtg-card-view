@@ -202,3 +202,20 @@ Status: `Accepted`, `Proposed` (awaiting user), `Superseded by D-NNN`.
   - Selecting a card on the canvas, or leaving the graph view, closes the second sidebar.
   - On the canvas the second card gets a dashed gold outline, and the link between the pair is drawn thick.
   - The canvas keeps its view centered when the side panel resizes it.
+
+## D-020 · 2026-11-17 · Accepted
+**GraphMTG / collections, Graph as the main view, card filters, deleting collections** (requested by the user)
+
+- **Renames are UI and docs only** (chosen by the user). The app is called **GraphMTG**, and a saved card list is a
+  **collection**. The Python package, `mtgcv` CLI, API routes (`/api/decks`), DB tables and data folders keep their
+  names, so existing saved data is untouched. "Deck section" became "List section" in labels.
+- **Graph is the main view.** It's first in the view switcher, and the app always opens on it with **Scryfall tag
+  synergy**. View and graph mode are no longer remembered across page loads (`mtgcv.view` / `mtgcv.graphMode` are
+  ignored). Within a session the graph mode is kept when switching views (the state lives in `App`).
+- **Filters** (chosen by the user): color identity (fits within / includes any / exactly), type, category, mana value range,
+  EDHREC rank (top N, unranked excluded), rarity, and max price (unpriced kept). They combine with the text search and
+  **hide** non-matching cards in every view. In the Graph, hidden cards and their links disappear, but the node
+  objects (and positions, saved layouts) are kept, so they reappear in place. Filters are session-only.
+- **Deleting collections**: a "Delete" button in the collection header and a × on each sidebar item (shown on hover),
+  both with a confirmation. Deleting cascades to custom groupings and graph layouts.
+- The **Median rank** stat was removed from the collection header.

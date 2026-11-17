@@ -23,7 +23,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-const PLACEHOLDER = `Paste a deck list, one card per line. For example:
+const PLACEHOLDER = `Paste a card list, one card per line. For example:
 
 Commander
 1 Atraxa, Praetors' Voice
@@ -104,17 +104,17 @@ export function DeckEditor({
   };
 
   return (
-    <Modal title={isNew ? 'New deck' : 'Edit deck'} onClose={onClose}>
+    <Modal title={isNew ? 'New collection' : 'Edit collection'} onClose={onClose}>
       <form
         className="deck-form"
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(name.trim() || suggested || 'Untitled deck', text);
+          onSave(name.trim() || suggested || 'Untitled collection', text);
         }}
       >
         <label>
           Name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={suggested || 'Untitled deck'} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={suggested || 'Untitled collection'} />
         </label>
         <div className="import-row">
           <button type="button" onClick={() => fileInput.current?.click()} disabled={importing}>
@@ -192,7 +192,7 @@ export function DeckEditor({
         <footer className="modal-foot">
           {onDelete && (
             <button type="button" className="danger" onClick={onDelete}>
-              Delete deck
+              Delete collection
             </button>
           )}
           <span className="spacer" />
@@ -214,7 +214,7 @@ const SEED_OPTIONS: { value: SeedMode; label: string }[] = [
   { value: 'cmc', label: 'Mana value' },
   { value: 'color', label: 'Color' },
   { value: 'user_tag', label: 'Your tags' },
-  { value: 'section', label: 'Deck section' },
+  { value: 'section', label: 'List section' },
   { value: 'empty', label: 'Nothing — start empty (all cards Unsorted)' },
 ];
 

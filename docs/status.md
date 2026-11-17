@@ -35,6 +35,10 @@ _Last updated: 2026-11-16_
 - Verified manually: a live run against Scryfall, plus a headless-Edge CDP script that performs a real mouse
   drag between groups and confirms it persisted (the script lived in the session scratchpad and is not in the repo)
 
+- **GraphMTG update** (D-020): UI renamed to GraphMTG/collections; Graph is the first and default view (tag
+  synergy); filter bar (colors, type, category, MV, EDHREC rank, rarity, price) hides cards in all views; delete
+  collections from the header or sidebar; Median rank stat removed.
+
 ## Next / ideas
 - Graph: the whole-library tag graph is one dense "hairball" (broad themes like Artifacts and Spellslinger
   connect everything). Options: lay out using only links at or above the current filter, or color nodes by theme or cluster.

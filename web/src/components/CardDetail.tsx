@@ -94,7 +94,7 @@ export function CardDetail({
       )}
 
       {!card.found ? (
-        <p className="warn">This card wasn't found on Scryfall. Check the spelling in the deck list.</p>
+        <p className="warn">This card wasn't found on Scryfall. Check the spelling in the card list.</p>
       ) : (
         <>
           <dl className="stats">
@@ -163,7 +163,7 @@ export function CardDetail({
                 <li key={t}>
                   <button
                     className={`tag${strong.has(t) ? ' strong' : ''}`}
-                    title={(tagDescriptions[t] ?? '') + '\n\nClick to filter the deck by this tag'}
+                    title={(tagDescriptions[t] ?? '') + '\n\nClick to highlight this tag in the collection'}
                     onClick={() => onSearch(t)}
                   >
                     {strong.has(t) && '★ '}

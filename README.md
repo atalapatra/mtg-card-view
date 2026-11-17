@@ -1,8 +1,10 @@
-# mtg-card-view
+# GraphMTG
 
-Analyze a Magic: The Gathering card list with data from [Scryfall](https://scryfall.com/docs/api):
-functional category tags, EDHREC rank, and card details. Group cards by what they do
-and sort by popularity.
+See how the cards in a Magic: The Gathering collection work together. GraphMTG pulls data from
+[Scryfall](https://scryfall.com/docs/api) (functional tags, card details) and EDHREC (commander synergy), then
+draws your cards as a synergy graph. Group them by what they do, sort by popularity, filter, and organize.
+
+The code, the `mtgcv` command and the data folders keep their original `mtg-card-view` / `mtgcv` names (D-020).
 
 ## Setup
 
@@ -19,23 +21,30 @@ cd web; npm install; npm run build; cd ..   # one-time: build the frontend
 mtgcv serve --open                          # http://127.0.0.1:8000
 ```
 
-- Paste a deck list with **+ New deck**. To load a **ManaBox** collection export, click **Import ManaBox CSV…** or drop
-  the `.csv` file on the card list. It becomes a normal card list you can review before saving. Tokens and wishlist
-  lists are left out unless you tick their checkboxes. Decks are saved in `%APPDATA%\mtg-card-view\decks.sqlite3`.
-- Switch between **Board**, **Table**, and **Images** views. Group by category, type, mana value, color, and more. Sort by EDHREC rank, name, MV, or price.
-  Filter by name, rules text, or tag.
-- Choose **Group by → + New custom grouping…** to make your own groups, then drag cards between them in the Board view.
-  Changes save automatically.
-- Click a card to see its details: EDHREC rank, categories, and every Scryfall tag (★ marks cards Tagger considers defining examples of a tag).
-- **Graph** view: cards as images in a synergy network. Two weightings are available:
+- Create a **collection** with **+ New collection**: paste a card list, or click **Import ManaBox CSV…** (or drop the
+  `.csv` file on the card list). A ManaBox export becomes a normal card list you can review before saving. Tokens and
+  wishlist lists are left out unless you tick their checkboxes. Collections are saved in
+  `%APPDATA%\mtg-card-view\decks.sqlite3`. Delete one from the header's **Delete** button or the × next to it in the sidebar.
+- **Graph** (the main view; the app always opens on it, with **Scryfall tag synergy**): cards as images in a
+  synergy network. Two weightings are available:
   - **Scryfall tag synergy** links payoffs to enablers (e.g. "lifegain matters" ↔ lifegain cards; see `THEMES` in
     `src/mtgcv/synergy.py`).
-  - **EDHREC commander synergy** links every legendary creature in the list to the cards EDHREC says over-perform
-    with it. The first use downloads each commander's EDHREC page, about 0.5 s each, then caches it for a week.
+  - **EDHREC commander synergy** links every legendary creature in the collection to the cards EDHREC says
+    over-perform with it. The first use downloads each commander's EDHREC page, about 0.5 s each, then caches it for
+    a week.
 
-  Drag cards to arrange them; the layout is saved per deck. **Reset layout** returns to the original arrangement.
-  Scroll to zoom and double-click empty space to fit. Hover or click a card to highlight its links. The search box
-  highlights matching cards. It works with whole collections (tested with 2,000 cards).
+  Drag cards to arrange them; the layout is saved per collection. **Reset layout** returns to the original
+  arrangement. Scroll to zoom and double-click empty space to fit. Hover or click a card to highlight its links.
+  Click a synergy link in the card panel to open that card alongside, with a box explaining their synergy. The
+  search box highlights matching cards. It works with whole collections (tested with 2,000 cards).
+- **Board**, **Table** and **Images** views: group by category, type, mana value, color, and more. Sort by EDHREC
+  rank, name, MV, or price. Choose **Group by → + New custom grouping…** to make your own groups, then drag cards
+  between them in the Board view. Changes save automatically.
+- **Filters** (button next to the search box): color identity (fits within / includes any / exactly), card type,
+  category, mana value range, EDHREC rank, rarity, and max price. Non-matching cards are hidden in every view; in the
+  Graph they keep their positions and reappear in place when you clear the filter.
+- Click a card to see its details: EDHREC rank, categories, and every Scryfall tag (★ marks cards Tagger considers
+  defining examples of a tag).
 
 For frontend development, run `mtgcv serve` and `cd web; npm run dev` (http://localhost:5173, hot reload).
 

@@ -1161,3 +1161,134 @@ code {
     box-shadow: none;
   }
 }
+
+/* --- collections sidebar: delete buttons -------------------------------------------- */
+.sidebar-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 4px 8px 0;
+}
+.deck-list li {
+  display: flex;
+  align-items: center;
+}
+.deck-list li > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.deck-list .deck-delete {
+  /* override `.deck-list button { width: 100% }` so the name button keeps the space */
+  width: auto;
+  flex: none;
+  opacity: 0;
+  padding: 0 6px;
+}
+.deck-list li:hover .deck-delete,
+.deck-list .deck-delete:focus-visible {
+  opacity: 1;
+}
+
+/* --- filters -------------------------------------------------------------------------- */
+.filters-btn.on {
+  border-color: var(--accent);
+}
+.filters-btn .badge {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 8px 10px;
+  margin: 2px 0 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.filter-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.filter-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.filter-group input[type='number'] {
+  width: 62px;
+  padding: 3px 6px;
+}
+.filter-group select {
+  padding: 3px 6px;
+}
+.pip-toggle {
+  padding: 2px;
+  line-height: 0;
+  border-radius: 50%;
+  opacity: 0.45;
+  background: none;
+}
+.pip-toggle.on {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.chip-toggle {
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.chip-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.filter-categories summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.filter-categories summary::-webkit-details-marker {
+  display: none;
+}
+.filter-categories summary::after {
+  content: '▾';
+  color: var(--muted);
+  font-size: 11px;
+}
+.filter-categories[open] {
+  flex-basis: 100%;
+}
+.filter-cat-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.filter-count {
+  font-size: 12px;
+  color: var(--accent);
+}
+.filter-summary {
+  margin-left: auto;
+  gap: 10px;
+}

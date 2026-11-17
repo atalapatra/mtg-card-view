@@ -13,6 +13,12 @@ interface Props {
   /** Card open in the second sidebar (from a synergy link). */
   pairKey: string | null;
   onSelect: (card: Card | null) => void;
+  /** Filter bar predicate: non-matching cards (and their links) are hidden, positions kept. */
+  filter: (card: Card) => boolean;
+  filterActive: boolean;
+  /** Weighting mode; owned by App so it defaults to tags on load but survives view switches. */
+  mode: GraphMode;
+  onModeChange: (m: GraphMode) => void;
   /** Reports each card's connections (for the detail panel). */
   onConnections: (conns: Map<string, Connection[]> | null) => void;
 }
@@ -52,8 +58,6 @@ type Phase =
   | { kind: 'ready' }
   | { kind: 'error'; message: string };
 
-const MODE_KEY = 'mtgcv.graphMode';
-
 export function GraphView({
   deckId,
   cardsByKey,
@@ -62,23 +66,12 @@ export function GraphView({
   selectedKey,
   pairKey,
   onSelect,
+  filter,
+  filterActive,
+  mode,
+  onModeChange: setMode,
   onConnections,
 }: Props) {
-  const [mode, setModeState] = useState<GraphMode>(() => {
-    try {
-      return localStorage.getItem(MODE_KEY) === 'edhrec' ? 'edhrec' : 'tags';
-    } catch {
-      return 'tags';
-    }
-  });
-  const setMode = (m: GraphMode) => {
-    setModeState(m);
-    try {
-      localStorage.setItem(MODE_KEY, m);
-    } catch {
-      /* ignore */
-    }
-  };
   const [phase, setPhase] = useState<Phase>({ kind: 'fetching' });
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [nodes, setNodes] = useState<GNode[]>([]);
@@ -222,17 +215,38 @@ export function GraphView({
     return new Set(nodes.filter((n) => search(n.card)).map((n) => n.key));
   }, [nodes, search, searchActive]);
 
+  // Filter bar: hide non-matching cards and their links. Node objects are shared with
+  // `nodes`, so positions (and drags) are kept and saved for every card.
+  const shown = useMemo(() => {
+    const edges = prepared?.edges ?? [];
+    if (!filterActive) return { nodes, edges };
+    const remap = new Map<number, number>();
+    const kept: GNode[] = [];
+    nodes.forEach((n, i) => {
+      if (filter(n.card)) {
+        remap.set(i, kept.length);
+        kept.push(n);
+      }
+    });
+    const keptEdges: GEdge[] = [];
+    for (const e of edges) {
+      const s = remap.get(e.s);
+      const t = remap.get(e.t);
+      if (s != null && t != null) keptEdges.push({ ...e, s, t });
+    }
+    return { nodes: kept, edges: keptEdges };
+  }, [nodes, prepared, filter, filterActive]);
+
   const threshold = minRaw[mode];
-  const visibleEdges = prepared ? prepared.edges.filter((e) => e.raw >= threshold).length : 0;
+  const visibleEdges = shown.edges.filter((e) => e.raw >= threshold).length;
   const connectedCount = useMemo(() => {
-    if (!prepared) return 0;
     const s = new Set<number>();
-    for (const e of prepared.edges) {
+    for (const e of shown.edges) {
       s.add(e.s);
       s.add(e.t);
     }
     return s.size;
-  }, [prepared]);
+  }, [shown]);
 
   return (
     <div className="graph-view">
@@ -272,7 +286,7 @@ export function GraphView({
 
         <span className="graph-stats muted">
           {prepared &&
-            `${nodes.length.toLocaleString()} cards · ${connectedCount.toLocaleString()} connected · ${visibleEdges.toLocaleString()} links`}
+            `${filterActive ? `${shown.nodes.length.toLocaleString()} of ` : ''}${nodes.length.toLocaleString()} cards · ${connectedCount.toLocaleString()} connected · ${visibleEdges.toLocaleString()} links`}
           {graph?.mode === 'edhrec' && ` · ${graph.hubs.length} commanders`}
         </span>
 
@@ -295,15 +309,15 @@ export function GraphView({
         </p>
       )}
       {graph?.mode === 'edhrec' && graph.hubs.length === 0 && (
-        <p className="hint">No legendary creatures in this list — EDHREC synergy needs at least one commander.</p>
+        <p className="hint">No legendary creatures in this collection — EDHREC synergy needs at least one commander.</p>
       )}
 
       <div className="graph-stage">
         {nodes.length > 0 && (
           <GraphCanvas
             handle={canvas}
-            nodes={nodes}
-            edges={prepared?.edges ?? []}
+            nodes={shown.nodes}
+            edges={shown.edges}
             minRaw={threshold}
             selectedKey={selectedKey}
             secondaryKey={pairKey}

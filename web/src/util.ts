@@ -1,4 +1,4 @@
-import type { BoardLayout, Card, SortBy } from './types';
+import type { BoardLayout, Card, Filters, SortBy } from './types';
 import { UNSORTED_ID } from './types';
 
 // --- sorting & filtering -------------------------------------------------------
@@ -98,4 +98,48 @@ export function moveGroup(layout: BoardLayout, id: string, delta: -1 | 1): Board
   if (i < 0 || j < 0 || j >= groups.length) return layout;
   [groups[i], groups[j]] = [groups[j], groups[i]];
   return { groups };
+}
+
+// --- filters ---------------------------------------------------------------------
+
+export function activeFilterCount(f: Filters): number {
+  return (
+    (f.colors.length ? 1 : 0) +
+    (f.types.length ? 1 : 0) +
+    (f.categories.length ? 1 : 0) +
+    (f.mvMin != null || f.mvMax != null ? 1 : 0) +
+    (f.rankMax != null ? 1 : 0) +
+    (f.rarities.length ? 1 : 0) +
+    (f.priceMax != null ? 1 : 0)
+  );
+}
+
+function matchesColors(identity: string[], selected: string[], mode: Filters['colorMode']): boolean {
+  const wantColorless = selected.includes('C');
+  const sel = selected.filter((c) => c !== 'C');
+  switch (mode) {
+    case 'within': // playable in a deck of the selected colors (colorless always fits)
+      return identity.every((c) => sel.includes(c));
+    case 'any': // has at least one selected color (or is colorless, if C is selected)
+      return identity.length === 0 ? wantColorless : identity.some((c) => sel.includes(c));
+    case 'exact':
+      return identity.length === sel.length && identity.every((c) => sel.includes(c)) && (identity.length > 0 || wantColorless);
+  }
+}
+
+export function matchesFilters(c: Card, f: Filters): boolean {
+  if (activeFilterCount(f) === 0) return true;
+  if (!c.found) return false;
+  if (f.colors.length && !matchesColors(c.color_identity, f.colors, f.colorMode)) return false;
+  if (f.types.length) {
+    const front = c.type_line.split(' // ')[0];
+    if (!f.types.some((t) => front.includes(t))) return false;
+  }
+  if (f.categories.length && !c.categories.some((cat) => f.categories.includes(cat))) return false;
+  if (f.mvMin != null && c.cmc < f.mvMin) return false;
+  if (f.mvMax != null && c.cmc > f.mvMax) return false;
+  if (f.rankMax != null && (c.edhrec_rank == null || c.edhrec_rank > f.rankMax)) return false;
+  if (f.rarities.length && !f.rarities.includes(c.rarity)) return false;
+  if (f.priceMax != null && c.price_usd != null && c.price_usd > f.priceMax) return false;
+  return true;
 }

@@ -4,6 +4,9 @@ Context for Claude Code sessions in this repo. Keep it short and current. Put de
 
 ## Project
 
+**GraphMTG** (user-facing name; repo, package, `mtgcv` CLI, API routes and data dirs keep the old names, D-020).
+In the UI a saved card list is a **collection** (code/API/DB still say "deck").
+
 Analyze a Magic: The Gathering card list using Scryfall data: functional category tags, EDHREC rank,
 and card details. The goal is to understand what each card does in a deck and how well it does it.
 Group cards by category and sort by EDHREC rank. The end goal is a UI where cards can be
@@ -57,10 +60,10 @@ synergy.py     THEMES (payoff <-> enabler), build_tag_graph, build_edhrec_graph,
 web/src/
   types.ts       TS mirror of CardInfo / Report.to_api_dict / deck + board shapes
   api.ts         fetch wrappers
-  util.ts        client-side sort/filter, symbol URLs, pure board ops (moveCard, addGroup…)
+  util.ts        client-side sort/search/filters (matchesFilters), symbol URLs, pure board ops (moveCard, addGroup…)
   App.tsx        state: decks, current deck, view, grouping ("auto:<mode>" | "board:<id>"), sort, search,
                  selectedKey + pairKey (second sidebar, graph view)
-  components/    BoardView (dnd-kit), TableView, GridView, CardDetail, SynergyBox, Dialogs, HoverPreview, Symbols
+  components/    BoardView (dnd-kit), TableView, GridView, CardDetail, SynergyBox, FilterBar, Dialogs, HoverPreview, Symbols
   graph/         GraphView (fetch/poll, layout, save, reset), GraphCanvas (canvas renderer), layoutWorker (d3-force)
 ```
 

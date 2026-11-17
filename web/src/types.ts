@@ -176,7 +176,7 @@ export const GROUP_LABELS: Record<GroupMode, string> = {
   type: 'Card type',
   cmc: 'Mana value',
   color: 'Color',
-  section: 'Deck section',
+  section: 'List section',
   user_tag: 'Your tags',
   none: 'No grouping',
 };
@@ -197,3 +197,30 @@ export interface ViewGroup {
 }
 
 export const UNSORTED_ID = '__unsorted';
+
+// --- card filters (client-side; combine with the text search) ---
+export type ColorMode = 'within' | 'any' | 'exact';
+
+export interface Filters {
+  colors: string[]; // 'W' | 'U' | 'B' | 'R' | 'G' | 'C'
+  colorMode: ColorMode;
+  types: string[]; // front-face type words: Creature, Instant, ...
+  categories: string[];
+  mvMin: number | null;
+  mvMax: number | null;
+  rankMax: number | null; // EDHREC rank <= this (unranked cards excluded)
+  rarities: string[];
+  priceMax: number | null; // cards without a price are kept
+}
+
+export const EMPTY_FILTERS: Filters = {
+  colors: [],
+  colorMode: 'within',
+  types: [],
+  categories: [],
+  mvMin: null,
+  mvMax: null,
+  rankMax: null,
+  rarities: [],
+  priceMax: null,
+};
