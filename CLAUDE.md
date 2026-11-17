@@ -34,6 +34,7 @@ dragged and dropped into custom groupings.
 .\.venv\Scripts\mtgcv card "Sol Ring"                     # inspect one card's tags
 .\.venv\Scripts\python -m pip install -e ".[dev]"         # (re)install
 .\.venv\Scripts\mtgcv serve --open                        # app at :8000 (serves web/dist if built)
+make reset / make reset-cache                             # delete local data (scripts/reset_data.py)
 
 cd web; npm install; npm run build                        # build UI (tsc typecheck + vite)
 cd web; npm run dev                                       # UI dev server :5173, proxies /api -> :8000
