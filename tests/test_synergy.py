@@ -121,3 +121,43 @@ def test_edhrec_page_parse_and_cache(tmp_path):
     assert client.fetch("not-a-commander") is None
     assert client.missing(["atraxa-praetors-voice", "not-a-commander", "other"]) == ["other"]
     assert client.get_pages(["atraxa-praetors-voice"])["atraxa-praetors-voice"].cards == page.cards
+
+
+def test_explain_pair_themes_and_typal():
+    from mtgcv.synergy import explain_pair
+    cards, idx = make(
+        card("Ajani's Pridemate", "Creature — Cat Soldier", ["lifegain-matters"]),
+        card("Soul Warden", "Creature — Human Cleric", ["lifegain"], categories=["Lifegain"]),
+        card("Elvish Archdruid", "Creature — Elf Druid", ["typal-elf"]),
+        card("Llanowar Elves", "Creature — Elf Druid"),
+    )
+    pridemate, warden, archdruid, elves = cards
+    # Order of arguments doesn't matter: payoff/enabler roles are detected.
+    exp = explain_pair(warden, pridemate, idx, {})
+    assert exp["themes"] == [{
+        "theme": "Lifegain", "payoff": "main:Ajani's Pridemate", "enabler": "main:Soul Warden",
+        "payoff_reasons": ["lifegain-matters"], "enabler_reasons": ["Lifegain category"],
+    }]
+    assert exp["edhrec"] == []  # neither is a commander
+    typal = explain_pair(archdruid, elves, idx, {})["themes"]
+    assert typal == [{"theme": "Typal: Elf", "payoff": "main:Elvish Archdruid", "enabler": "main:Llanowar Elves",
+                      "payoff_reasons": ["typal-elf"], "enabler_reasons": ["Elf creature"]}]
+
+
+def test_explain_pair_edhrec_statuses():
+    from mtgcv.synergy import explain_pair
+    cards, idx = make(
+        card("Atraxa, Praetors' Voice", "Legendary Creature — Phyrexian Angel Horror"),
+        card("Doubling Season", "Enchantment"),
+        card("Grizzly Bears", "Creature — Bear"),
+    )
+    atraxa, season, bears = cards
+    page = CommanderPage(slug="atraxa-praetors-voice", num_decks=1000,
+                         cards={"doubling season": (0.45, 500, 900)})
+    pages = {"atraxa-praetors-voice": page}
+    [e] = explain_pair(season, atraxa, idx, pages)["edhrec"]
+    assert e == {"commander": "main:Atraxa, Praetors' Voice", "card": "main:Doubling Season", "status": "listed",
+                 "commander_decks": 1000, "synergy": 0.45, "num_decks": 500, "potential_decks": 900}
+    assert explain_pair(atraxa, bears, idx, pages)["edhrec"][0]["status"] == "not_listed"
+    assert explain_pair(atraxa, bears, idx, {})["edhrec"][0]["status"] == "not_downloaded"
+    assert explain_pair(atraxa, bears, idx, {"atraxa-praetors-voice": None})["edhrec"][0]["status"] == "no_page"

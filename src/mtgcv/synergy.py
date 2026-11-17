@@ -57,12 +57,19 @@ def _front_type(c: CardInfo) -> str:
     return c.type_line.split(" // ")[0]
 
 
+def _labeled(pred, label: str):
+    """Attach a human-readable explanation used by explain_pair()."""
+    pred.label = label
+    return pred
+
+
 def _type(*words: str) -> CardPred:
-    return lambda c, _t: any(w in _front_type(c) for w in words)
+    return _labeled(lambda c, _t: any(w in _front_type(c) for w in words),
+                    " or ".join(words) + " card")
 
 
 def _cat(name: str) -> CardPred:
-    return lambda c, _t: name in c.categories
+    return _labeled(lambda c, _t: name in c.categories, f"{name} category")
 
 
 _ETB_RE = re.compile(r"\bwhen(?:ever)? [^.]*?\benters\b", re.IGNORECASE)
@@ -77,6 +84,10 @@ def _etb(c: CardInfo, _tags: set[str]) -> bool:
 
 def _makes_tokens(c: CardInfo, _tags: set[str]) -> bool:
     return bool(_TOKEN_RE.search(c.oracle_text))
+
+
+_labeled(_etb, "has an enters-the-battlefield trigger")
+_labeled(_makes_tokens, "creates tokens")
 
 
 def _any(*preds: CardPred) -> CardPred:
@@ -308,3 +319,82 @@ def build_edhrec_graph(cards: list[CardInfo], pages: dict[str, CommanderPage | N
     edges = [(a, b, round(weights[(a, b)], 4), -1) for a, b in sorted(keep)]
     return Graph(mode="edhrec", nodes=[c.key for c in cards], hubs=[h.key for h in hubs], edges=edges,
                  meta={"commanders": len(hubs), "missing_pages": missing_pages})
+
+
+# --- explaining one pair ---------------------------------------------------------------
+
+def _why(tags_matched: frozenset[str], card_tags: set[str], rule, card: CardInfo) -> list[str]:
+    reasons = sorted(tags_matched & card_tags)
+    if not reasons and rule is not None and rule(card, card_tags):
+        reasons = [getattr(rule, "label", "matches rule")]
+    return reasons
+
+
+def explain_tag_pair(a: CardInfo, b: CardInfo, tags: TagIndex) -> list[dict]:
+    """Every payoff <-> enabler theme linking a and b, in either direction, with the
+    tags (or rule) that matched on each side."""
+    ta, tb = tags.match_tags_for(a.oracle_id), tags.match_tags_for(b.oracle_id)
+    out: list[dict] = []
+    for payoff, enabler, tp, te in ((a, b, ta, tb), (b, a, tb, ta)):
+        for theme in THEMES:
+            if theme.is_payoff(payoff, tp) and theme.is_enabler(enabler, te):
+                out.append({
+                    "theme": theme.name,
+                    "payoff": payoff.key,
+                    "enabler": enabler.key,
+                    "payoff_reasons": _why(theme.payoff_tags, tp, theme.payoff_rule, payoff),
+                    "enabler_reasons": _why(theme.enabler_tags, te, theme.enabler_rule, enabler),
+                })
+        enabler_types = _creature_subtypes(enabler)
+        changeling = "Changeling" in enabler.keywords
+        for sub in sorted(_typal_subtypes(tp)):
+            if sub in enabler_types or (changeling and enabler_types):
+                out.append({
+                    "theme": f"Typal: {sub.title()}",
+                    "payoff": payoff.key,
+                    "enabler": enabler.key,
+                    "payoff_reasons": [f"typal-{sub}"],
+                    "enabler_reasons": ["Changeling (every creature type)" if sub not in enabler_types
+                                        else f"{sub.title()} creature"],
+                })
+    return out
+
+
+def explain_edhrec_pair(a: CardInfo, b: CardInfo,
+                        pages: dict[str, CommanderPage | None]) -> list[dict]:
+    """EDHREC numbers when either card is a commander (hub). Status per direction:
+    'listed', 'not_listed' (card isn't among the commander's ~300 cards), 'no_page'
+    (EDHREC has no page) or 'not_downloaded' (open EDHREC mode to fetch it)."""
+    out = []
+    for commander, card in ((a, b), (b, a)):
+        if not is_commander_candidate(commander):
+            continue
+        slug = edhrec_slug(commander.name)
+        entry = {"commander": commander.key, "card": card.key, "status": "not_downloaded"}
+        if slug in pages:
+            page = pages[slug]
+            if page is None:
+                entry["status"] = "no_page"
+            else:
+                stats = page.cards.get(normalize_name(front_face(card.name)))
+                entry["commander_decks"] = page.num_decks
+                if stats:
+                    syn, num, potential = stats
+                    entry.update(status="listed", synergy=syn, num_decks=num, potential_decks=potential)
+                else:
+                    entry["status"] = "not_listed"
+        out.append(entry)
+    return out
+
+
+def explain_pair(a: CardInfo, b: CardInfo, tags: TagIndex,
+                 pages: dict[str, CommanderPage | None]) -> dict:
+    ta, tb = tags.tags_for(a.oracle_id), tags.tags_for(b.oracle_id)
+    return {
+        "a": a.key,
+        "b": b.key,
+        "themes": explain_tag_pair(a, b, tags),
+        "edhrec": explain_edhrec_pair(a, b, pages),
+        "shared_categories": [c for c in a.categories if c in b.categories],
+        "shared_tags": sorted(ta & tb),
+    }

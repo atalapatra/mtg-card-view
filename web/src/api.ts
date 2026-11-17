@@ -6,6 +6,7 @@ import type {
   GraphMode,
   GraphResponse,
   ImportResult,
+  PairExplanation,
   Positions,
   SeedMode,
 } from './types';
@@ -48,4 +49,9 @@ export const api = {
     req<void>('PUT', `/api/decks/${deckId}/graph-layout/${mode}`, { positions }),
   deleteGraphLayout: (deckId: number, mode: GraphMode) =>
     req<void>('DELETE', `/api/decks/${deckId}/graph-layout/${mode}`),
+  getPair: (deckId: number, a: string, b: string) =>
+    req<PairExplanation>(
+      'GET',
+      `/api/decks/${deckId}/pair?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
+    ),
 };

@@ -40,7 +40,14 @@ from mtgcv.edhrec import EdhrecClient, EdhrecFetcher, edhrec_slug
 from mtgcv.importers import manabox_to_decklist
 from mtgcv.scryfall import ScryfallClient, TagIndex
 from mtgcv.store import DeckStore, NotFound
-from mtgcv.synergy import Graph, build_edhrec_graph, build_tag_graph, commander_hubs
+from mtgcv.synergy import (
+    Graph,
+    build_edhrec_graph,
+    build_tag_graph,
+    commander_hubs,
+    explain_pair,
+    is_commander_candidate,
+)
 
 TAGS_RELOAD_SECONDS = 24 * 3600
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -252,6 +259,19 @@ def create_app(store: DeckStore | None = None, client: ScryfallClient | None = N
                 return {"status": "loading", "progress": {"done": job.done, "total": job.total}}
             graph = build_edhrec_graph(report.cards, fetcher.client.get_pages(slugs))
         return {"status": "ready", "graph": graph.to_dict(), "layout": store.get_layout(deck_id, mode)}
+
+    @app.get("/api/decks/{deck_id}/pair")
+    def explain_card_pair(deck_id: int, a: str, b: str) -> dict:
+        """Why two cards in this deck synergize: Scryfall themes (both directions) and
+        EDHREC numbers when either is a commander. EDHREC data comes from the cache only."""
+        deck = get_or_404(store.get_deck, deck_id)
+        report = analyzer.report(deck["text"])
+        by_key = {c.key: c for c in report.cards}
+        if a not in by_key or b not in by_key:
+            raise HTTPException(404, "Card not in this deck")
+        ca, cb = by_key[a], by_key[b]
+        slugs = [edhrec_slug(c.name) for c in (ca, cb) if is_commander_candidate(c)]
+        return explain_pair(ca, cb, analyzer.tag_index(), fetcher.client.get_pages(slugs))
 
     @app.put("/api/decks/{deck_id}/graph-layout/{mode}", status_code=204)
     def save_graph_layout(deck_id: int, mode: GraphMode, body: GraphLayoutIn) -> None:

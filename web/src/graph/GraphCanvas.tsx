@@ -34,6 +34,8 @@ interface Props {
   edges: GEdge[];
   minRaw: number;
   selectedKey: string | null;
+  /** Card open in the second sidebar: outlined, and its link to the selected card emphasized. */
+  secondaryKey?: string | null;
   searchMatches: Set<string> | null;
   onSelect: (card: Card | null) => void;
   onMoved: () => void;
@@ -64,7 +66,17 @@ function nodeColor(c: Card): string {
 
 type ImgState = HTMLImageElement | 'queued' | 'loading' | 'error';
 
-export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, onSelect, onMoved, handle }: Props) {
+export function GraphCanvas({
+  nodes,
+  edges,
+  minRaw,
+  selectedKey,
+  secondaryKey = null,
+  searchMatches,
+  onSelect,
+  onMoved,
+  handle,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cam = useRef({ k: 0.5, tx: 0, ty: 0 });
   const size = useRef({ w: 0, h: 0 });
@@ -76,8 +88,8 @@ export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, 
   const preview = usePreview();
 
   // Latest props for the draw loop without re-binding listeners.
-  const props = useRef({ nodes, edges, minRaw, selectedKey, searchMatches });
-  props.current = { nodes, edges, minRaw, selectedKey, searchMatches };
+  const props = useRef({ nodes, edges, minRaw, selectedKey, secondaryKey, searchMatches });
+  props.current = { nodes, edges, minRaw, selectedKey, secondaryKey, searchMatches };
 
   const neighbors = useMemo(() => {
     const adj: number[][] = nodes.map(() => []);
@@ -137,7 +149,7 @@ export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, 
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const { nodes, edges, minRaw, selectedKey, searchMatches } = props.current;
+    const { nodes, edges, minRaw, selectedKey, secondaryKey, searchMatches } = props.current;
     const { k, tx, ty } = cam.current;
     const { w, h } = size.current;
     const dpr = window.devicePixelRatio || 1;
@@ -154,6 +166,7 @@ export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, 
     const inView = (n: GNode) => n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1;
 
     const selectedIdx = selectedKey ? nodes.findIndex((n) => n.key === selectedKey) : -1;
+    const secondaryIdx = secondaryKey ? nodes.findIndex((n) => n.key === secondaryKey) : -1;
     const focus = hover.current ?? (selectedIdx >= 0 ? selectedIdx : null);
     const focusSet = focus != null ? new Set([focus, ...neighborsRef.current[focus]]) : null;
 
@@ -196,6 +209,18 @@ export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, 
         ctx.lineTo(nodes[e.t].x, nodes[e.t].y);
         ctx.stroke();
       }
+    }
+    // The link between the two cards open in the sidebars.
+    if (selectedIdx >= 0 && secondaryIdx >= 0) {
+      const a = nodes[selectedIdx];
+      const b = nodes[secondaryIdx];
+      ctx.strokeStyle = accent;
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 6 / Math.max(k, 0.15);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
     }
 
     // Nodes: regular cards first, hubs on top, focused ones last.
@@ -240,11 +265,13 @@ export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, 
         ctx.lineWidth = Math.max(3, 2.5 / k);
         ctx.strokeRect(left, top, nw, nh);
       }
-      if (i === selectedIdx || i === hover.current) {
+      if (i === selectedIdx || i === secondaryIdx || i === hover.current) {
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = i === selectedIdx ? accent : textColor;
+        ctx.strokeStyle = i === selectedIdx || i === secondaryIdx ? accent : textColor;
         ctx.lineWidth = Math.max(2, 2.5 / k);
+        if (i === secondaryIdx) ctx.setLineDash([8 / k, 5 / k]);
         ctx.strokeRect(left - 2 / k, top - 2 / k, nw + 4 / k, nh + 4 / k);
+        ctx.setLineDash([]);
       }
     }
     ctx.globalAlpha = 1;
@@ -279,6 +306,12 @@ export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, 
       const r = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       const first = size.current.w === 0;
+      // Keep whatever was at the center of the view centered when the canvas resizes
+      // (e.g. the second sidebar opening/closing narrows or widens it).
+      if (!first) {
+        cam.current.tx += (r.width - size.current.w) / 2;
+        cam.current.ty += (r.height - size.current.h) / 2;
+      }
       size.current = { w: r.width, h: r.height };
       canvas.width = Math.round(r.width * dpr);
       canvas.height = Math.round(r.height * dpr);
@@ -291,7 +324,7 @@ export function GraphCanvas({ nodes, edges, minRaw, selectedKey, searchMatches, 
 
   useEffect(() => {
     requestDraw();
-  }, [nodes, edges, minRaw, selectedKey, searchMatches, requestDraw]);
+  }, [nodes, edges, minRaw, selectedKey, secondaryKey, searchMatches, requestDraw]);
 
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
 

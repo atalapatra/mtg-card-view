@@ -8,6 +8,7 @@ import { usePreview } from './components/HoverPreview';
 import { ColorPips } from './components/Symbols';
 import { TableView } from './components/TableView';
 import { GraphView } from './graph/GraphView';
+import { SynergyBox } from './components/SynergyBox';
 import type {
   BoardLayout,
   Card,
@@ -63,6 +64,7 @@ export default function App() {
   const [grouping, setGrouping] = useState('auto:category'); // "auto:<mode>" | "board:<id>"
   const [search, setSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [pairKey, setPairKey] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const saveTimers = useRef(new Map<number, number>());
@@ -83,6 +85,7 @@ export default function App() {
   const showDeck = (d: DeckDetail) => {
     setDetail(d);
     setSelectedKey(null);
+    setPairKey(null);
     setSearch('');
     setGrouping((g) => (g.startsWith('board:') ? 'auto:category' : g));
     try {
@@ -114,11 +117,19 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !dialog) setSelectedKey(null);
+      if (e.key !== 'Escape' || dialog) return;
+      // Close the second sidebar first, then the first.
+      if (pairKey) setPairKey(null);
+      else setSelectedKey(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialog]);
+  }, [dialog, pairKey]);
+
+  // The second sidebar only exists in the graph view.
+  useEffect(() => {
+    if (view !== 'graph') setPairKey(null);
+  }, [view]);
 
   // --- deck actions -----------------------------------------------------------
   const openDeck = (id: number) => run('Loading deck…', async () => showDeck(await api.getDeck(id)));
@@ -239,7 +250,24 @@ export default function App() {
   }, [detail, board, grouping, search, sort, cardsByKey]);
 
   const selectedCard = selectedKey ? cardsByKey.get(selectedKey) : undefined;
-  const select = (c: Card) => setSelectedKey((k) => (k === c.key ? null : c.key));
+  const select = (c: Card) => {
+    setSelectedKey((k) => (k === c.key ? null : c.key));
+    setPairKey(null);
+  };
+  // Second sidebar (graph view only): a card opened from a synergy link.
+  const pairCard =
+    view === 'graph' && selectedCard && pairKey && pairKey !== selectedKey ? cardsByKey.get(pairKey) : undefined;
+  /** Link clicked in the first sidebar: open (or replace) the second sidebar. */
+  const openLinkFromFirst = (key: string) => {
+    if (view === 'graph') setPairKey((k) => (k === key ? null : key));
+    else setSelectedKey(key);
+  };
+  /** Link clicked in the second sidebar: walk the chain (second -> first, clicked -> second). */
+  const openLinkFromSecond = (key: string) => {
+    if (!pairKey || key === selectedKey) return;
+    setSelectedKey(pairKey);
+    setPairKey(key);
+  };
   const searchFn = useCallback((c: Card) => matchesSearch(c, search), [search]);
   const isGraph = view === 'graph';
   const colorize = grouping === 'auto:category' || grouping === 'auto:primary' || !!board;
@@ -248,7 +276,7 @@ export default function App() {
   const s = detail?.report.summary;
 
   return (
-    <div className={`app${selectedCard ? ' with-detail' : ''}`}>
+    <div className={`app${pairCard ? ' with-pair' : selectedCard ? ' with-detail' : ''}`}>
       <nav className="sidebar">
         <div className="brand">MTG Card View</div>
         <button className="primary new-deck" onClick={() => setDialog('newDeck')}>
@@ -425,7 +453,11 @@ export default function App() {
                   search={searchFn}
                   searchActive={search.trim().length > 0}
                   selectedKey={selectedKey}
-                  onSelect={(c) => setSelectedKey(c ? c.key : null)}
+                  pairKey={pairKey}
+                  onSelect={(c) => {
+                    setSelectedKey(c ? c.key : null);
+                    setPairKey(null);
+                  }}
                   onConnections={setConnections}
                 />
               )}
@@ -434,16 +466,63 @@ export default function App() {
         )}
       </main>
 
-      {selectedCard && detail && (
-        <CardDetail
-          card={selectedCard}
-          tagDescriptions={detail.report.tag_descriptions}
-          onClose={() => setSelectedKey(null)}
-          onSearch={setSearch}
-          connections={isGraph ? (connections?.get(selectedCard.key) ?? []) : undefined}
-          cardsByKey={cardsByKey}
-          onSelectKey={setSelectedKey}
-        />
+      {selectedCard && detail && pairCard ? (
+        <div className="side-pair">
+          <SynergyBox
+            deckId={detail.deck.id}
+            a={selectedCard}
+            b={pairCard}
+            cardsByKey={cardsByKey}
+            tagDescriptions={detail.report.tag_descriptions}
+            onClose={() => setPairKey(null)}
+            onSwap={() => {
+              setSelectedKey(pairCard.key);
+              setPairKey(selectedCard.key);
+            }}
+          />
+          <div className="side-cols">
+            <CardDetail
+              key={selectedCard.key}
+              card={selectedCard}
+              tagDescriptions={detail.report.tag_descriptions}
+              onClose={() => {
+                // Closing the first card promotes the second one.
+                setSelectedKey(pairCard.key);
+                setPairKey(null);
+              }}
+              onSearch={setSearch}
+              connections={connections?.get(selectedCard.key) ?? []}
+              cardsByKey={cardsByKey}
+              onSelectKey={openLinkFromFirst}
+              activeLinkKey={pairCard.key}
+            />
+            <CardDetail
+              key={pairCard.key}
+              card={pairCard}
+              tagDescriptions={detail.report.tag_descriptions}
+              onClose={() => setPairKey(null)}
+              onSearch={setSearch}
+              connections={connections?.get(pairCard.key) ?? []}
+              cardsByKey={cardsByKey}
+              onSelectKey={openLinkFromSecond}
+              activeLinkKey={selectedCard.key}
+            />
+          </div>
+        </div>
+      ) : (
+        selectedCard &&
+        detail && (
+          <CardDetail
+            key={selectedCard.key}
+            card={selectedCard}
+            tagDescriptions={detail.report.tag_descriptions}
+            onClose={() => setSelectedKey(null)}
+            onSearch={setSearch}
+            connections={isGraph ? (connections?.get(selectedCard.key) ?? []) : undefined}
+            cardsByKey={cardsByKey}
+            onSelectKey={openLinkFromFirst}
+          />
+        )
       )}
 
       {busy && (

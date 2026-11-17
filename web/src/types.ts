@@ -136,6 +136,34 @@ export type GraphResponse =
   | { status: 'loading'; progress: { done: number; total: number } }
   | { status: 'ready'; graph: GraphData; layout: Positions | null };
 
+/** src/mtgcv/synergy.py explain_pair() — why two cards synergize. */
+export interface PairTheme {
+  theme: string;
+  payoff: string; // card key
+  enabler: string; // card key
+  payoff_reasons: string[];
+  enabler_reasons: string[];
+}
+
+export interface PairEdhrec {
+  commander: string; // card key
+  card: string; // card key
+  status: 'listed' | 'not_listed' | 'no_page' | 'not_downloaded';
+  commander_decks?: number;
+  synergy?: number;
+  num_decks?: number;
+  potential_decks?: number;
+}
+
+export interface PairExplanation {
+  a: string;
+  b: string;
+  themes: PairTheme[];
+  edhrec: PairEdhrec[];
+  shared_categories: string[];
+  shared_tags: string[];
+}
+
 export interface Connection {
   key: string;
   label: string;
