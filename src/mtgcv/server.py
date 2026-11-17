@@ -21,6 +21,8 @@ membership for all built-in grouping modes, so the UI can switch views instantly
 from __future__ import annotations
 
 import hashlib
+import os
+import sys
 import threading
 import time
 from collections import OrderedDict
@@ -33,6 +35,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from mtgcv import __version__
 from mtgcv.analyze import GROUP_MODES, Report, build_report, group_cards
 from mtgcv.categories import CATEGORIES
 from mtgcv.decklist import parse_decklist
@@ -50,7 +53,24 @@ from mtgcv.synergy import (
 )
 
 TAGS_RELOAD_SECONDS = 24 * 3600
-WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
+APP_ID = "graphmtg"
+
+
+def find_web_dist() -> Path | None:
+    """Locate the built frontend (index.html + assets), in order:
+    MTGCV_WEB_DIST override, the PyInstaller bundle (GraphMTG.exe), a copy installed
+    inside the package, then the repo checkout's web/dist."""
+    candidates = []
+    if os.environ.get("MTGCV_WEB_DIST"):
+        candidates.append(Path(os.environ["MTGCV_WEB_DIST"]))
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        candidates.append(Path(sys._MEIPASS) / "webui")
+    here = Path(__file__).resolve()
+    candidates += [here.parent / "webui", here.parents[2] / "web" / "dist"]
+    return next((c for c in candidates if (c / "index.html").is_file()), None)
+
+
+WEB_DIST = find_web_dist()
 
 
 # --- request models ---------------------------------------------------------------
@@ -178,6 +198,11 @@ def create_app(store: DeckStore | None = None, client: ScryfallClient | None = N
             return fn(*args)
         except NotFound as e:
             raise HTTPException(404, f"Not found: {e.args[0]}")
+
+    @app.get("/api/health")
+    def health() -> dict:
+        """Identifies a running GraphMTG (used by the launcher's single-instance check)."""
+        return {"app": APP_ID, "version": __version__}
 
     @app.post("/api/analyze")
     def analyze(body: AnalyzeIn) -> dict:

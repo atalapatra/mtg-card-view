@@ -1292,3 +1292,8 @@ code {
   margin-left: auto;
   gap: 10px;
 }
+.credit .version {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.8;
+}

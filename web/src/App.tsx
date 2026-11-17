@@ -72,6 +72,13 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [pairKey, setPairKey] = useState<string | null>(null);
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .health()
+      .then((h) => setVersion(h.version))
+      .catch(() => {});
+  }, []);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const saveTimers = useRef(new Map<number, number>());
@@ -324,6 +331,7 @@ export default function App() {
         <p className="credit">
           Card data &amp; images from <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>.
           Ranks from EDHREC.
+          {version && <span className="version">GraphMTG v{version}</span>}
         </p>
       </nav>
 
