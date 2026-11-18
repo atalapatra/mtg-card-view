@@ -56,11 +56,14 @@ export function DeckEditor({
   initialName?: string;
   initialText?: string;
   isNew: boolean;
-  onSave: (name: string, text: string) => void;
+  /** May return a promise: the save button stays locked until it settles. */
+  onSave: (name: string, text: string) => void | Promise<unknown>;
   onDelete?: () => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(initialName);
+  // Locks the save button while the collection is being analyzed, so it can't be submitted twice.
+  const [saving, setSaving] = useState(false);
   const [text, setText] = useState(initialText);
   const suggested = guessName(text);
 
@@ -109,7 +112,11 @@ export function DeckEditor({
         className="deck-form"
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(name.trim() || suggested || 'Untitled collection', text);
+          if (saving || importing) return;
+          setSaving(true);
+          Promise.resolve(onSave(name.trim() || suggested || 'Untitled collection', text)).finally(() =>
+            setSaving(false),
+          );
         }}
       >
         <label>
@@ -199,8 +206,8 @@ export function DeckEditor({
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="primary" disabled={!text.trim()}>
-            {isNew ? 'Analyze & save' : 'Save'}
+          <button type="submit" className="primary" disabled={!text.trim() || saving || importing} aria-busy={saving}>
+            {saving ? (isNew ? 'Analyzing…' : 'Saving…') : isNew ? 'Analyze & save' : 'Save'}
           </button>
         </footer>
       </form>

@@ -263,3 +263,27 @@ unsigned for now, Apple Silicon only). Extends D-021.
   separate `release` job publishes both platforms' files once both builds pass.
 - **Not notarized:** users must allow it once via System Settings → Privacy & Security → Open Anyway. Notarization
   needs the Apple Developer Program ($99/yr) and can be added to the `mac` job later. No Intel build.
+
+## D-023 · 2026-11-17 · Accepted
+**Graph: cards can no longer be dragged; dragging anywhere pans** (requested by the user). Supersedes the
+"drag cards to arrange" part of the graph view decisions (D-014 to D-017).
+
+- A press-and-drag on a card or on empty space pans the view. A click without movement still selects the card (or
+  clears the selection on empty space). Hover highlighting and previews are unchanged.
+- The computed layout is still saved per collection and mode, so it stays stable and new cards are placed around
+  existing ones. Layouts saved with manual arrangements from before this change are kept until **Reset layout**,
+  which recomputes the layout (its confirmation text was updated).
+
+## D-024 · 2026-11-17 · Accepted
+**Resizable sidebars** (requested by the user; the details below are defaults Claude picked, open to change).
+
+- Drag the inner edge of the collections sidebar (left) or the card panel (right) to resize it. The handle is an
+  invisible 8px strip that shows an accent line on hover. Double-click restores the default width. When focused,
+  arrow keys resize it (Shift for bigger steps).
+- Widths are saved per browser in localStorage (`mtgcv.width.left|detail|pair`). The single-card panel and the
+  two-card panel (graph synergy pair) remember separate widths.
+- Limits: left 160 to 480px (default 220). Card panel at least 280px (default 360). Two-card panel at least 480px
+  (default 720). The main area always keeps at least 360px, and widths are re-clamped when the window shrinks.
+- Below 900px wide, the handles are hidden and the existing stacked/overlay layout applies.
+- Implementation: `components/Resizer.tsx` (handle + `useStoredWidth`). App sets `--left-w` / `--right-w` on `.app`,
+  and the grid columns use those variables.

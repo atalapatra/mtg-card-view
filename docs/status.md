@@ -21,8 +21,8 @@ _Last updated: 2026-11-16_
     all Scryfall tags (★ for strong ones, click to filter), links to Scryfall, EDHREC, and Tagger
   - Hover image preview. Dark and light themes follow the OS.
 - **Graph view** (D-014 to D-017): card-image nodes on a canvas, two weightings (Scryfall payoff ↔ enabler
-  themes; EDHREC commander synergy with every legendary creature as a hub), drag to arrange (saved per deck
-  and mode), Reset back to the original deterministic layout, unconnected cards in an outer ring, search highlights
+  themes; EDHREC commander synergy with every legendary creature as a hub), layout saved per deck and
+  mode (cards can't be moved since D-023; dragging anywhere pans), Reset recomputes the deterministic layout, unconnected cards in an outer ring, search highlights
   matches, hovering or selecting a card highlights its links, and the detail panel lists "Synergy links".
   Verified with a 2,000-card list: about 3 s to a ready graph, plus about 106 s once to download about 200 EDHREC pages.
 - **ManaBox CSV import** (D-018): an "Import ManaBox CSV…" button and file drop in the deck dialog convert
@@ -45,6 +45,9 @@ _Last updated: 2026-11-16_
   Menu-bar front end in `src/mtgcv/macapp.py` (rumps); data in `~/Library/...`. Built and smoke-tested only in CI
   (`mac` job); never run on a real Mac yet.
 - `make reset` / `make reset-cache` (`scripts/reset_data.py`) delete local data.
+- Resizable left and right sidebars (D-024), with widths remembered per browser.
+- New/Edit collection dialog: "Analyze & save" / "Save" is locked (shows "Analyzing…") while the save runs, and while
+  a ManaBox CSV is being converted, so a list can't be imported twice. App.tsx also guards against overlapping saves.
 
 ## Next / ideas
 - Run the release workflow once manually on GitHub (Actions → Build GraphMTG → Run workflow) before the first tag.

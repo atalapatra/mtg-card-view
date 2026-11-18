@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from './api';
 import { BoardView, type BoardEditHandlers } from './components/BoardView';
 import { CardDetail } from './components/CardDetail';
@@ -27,8 +27,12 @@ import { EMPTY_FILTERS, GROUP_LABELS, SORT_LABELS, UNSORTED_ID } from './types';
 import * as ops from './util';
 import { activeFilterCount, matchesFilters, matchesSearch, sortCards } from './util';
 import { FilterBar } from './components/FilterBar';
+import { Resizer, useStoredWidth } from './components/Resizer';
 
 const LAST_DECK_KEY = 'mtgcv.lastDeck';
+const LEFT_MIN = 160;
+const LEFT_MAX = 480;
+const MAIN_MIN = 360; // the main area never gets narrower than this when sidebars are resized
 
 function usePersisted<T extends string>(key: string, initial: T, allowed: readonly T[]): [T, (v: T) => void] {
   const [value, setValue] = useState<T>(() => {
@@ -81,6 +85,16 @@ export default function App() {
   }, []);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  // Resizable sidebars: the collections list (left) and the card panel (right; separate width with two cards open).
+  const [leftW, setLeftW, commitLeftW] = useStoredWidth('left', 220);
+  const [detailW, setDetailW, commitDetailW] = useStoredWidth('detail', 360);
+  const [pairW, setPairW, commitPairW] = useStoredWidth('pair', 720);
+  const [viewportW, setViewportW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const saveTimers = useRef(new Map<number, number>());
 
   const run = useCallback(async <T,>(label: string, fn: () => Promise<T>): Promise<T | undefined> => {
@@ -148,23 +162,36 @@ export default function App() {
   // --- deck actions -----------------------------------------------------------
   const openDeck = (id: number) => run('Loading collection…', async () => showDeck(await api.getDeck(id)));
 
+  // Guards against a second create/save starting while one is in flight (the dialog also locks its button).
+  const savingDeck = useRef(false);
+  const guarded = async (fn: () => Promise<unknown>) => {
+    if (savingDeck.current) return;
+    savingDeck.current = true;
+    try {
+      await fn();
+    } finally {
+      savingDeck.current = false;
+    }
+  };
+
   const createDeck = (name: string, text: string) =>
-    run('Analyzing collection… (the first run downloads Scryfall tag data)', async () => {
+    guarded(() => run('Analyzing collection… (the first run downloads Scryfall tag data)', async () => {
       const d = await api.createDeck(name, text);
       showDeck(d);
       setGrouping('auto:category');
       setDialog(null);
       setDecks(await api.listDecks());
-    });
+    }));
 
-  const saveDeck = (name: string, text: string) =>
-    detail &&
-    run('Re-analyzing…', async () => {
+  const saveDeck = async (name: string, text: string) => {
+    if (!detail) return;
+    await guarded(() => run('Re-analyzing…', async () => {
       const d = await api.updateDeck(detail.deck.id, { name, text });
       setDetail(d);
       setDialog(null);
       setDecks(await api.listDecks());
-    });
+    }));
+  };
 
   const deleteCollection = (id: number, name: string) => {
     if (!confirm(`Delete the collection “${name}”? Its custom groupings and graph layouts are deleted too. This can't be undone.`))
@@ -299,11 +326,41 @@ export default function App() {
   const isGraph = view === 'graph';
   const colorize = grouping === 'auto:category' || grouping === 'auto:primary' || !!board;
 
+  // Sidebar widths, clamped so the main area always keeps MAIN_MIN px (a stored width may exceed a smaller window).
+  const hasRight = !!(selectedCard && detail);
+  const rightMin = pairCard ? 480 : 280;
+  const leftWidth = Math.max(LEFT_MIN, Math.min(leftW, LEFT_MAX, viewportW - MAIN_MIN - (hasRight ? rightMin : 0)));
+  const rightWanted = pairCard ? pairW : detailW;
+  const rightWidth = Math.max(rightMin, Math.min(rightWanted, viewportW - leftWidth - MAIN_MIN));
+  const layoutVars = { '--left-w': `${leftWidth}px`, '--right-w': `${rightWidth}px` } as CSSProperties;
+
   // --- render ---------------------------------------------------------------------
   const s = detail?.report.summary;
 
   return (
-    <div className={`app${pairCard ? ' with-pair' : selectedCard ? ' with-detail' : ''}`}>
+    <div className={`app${pairCard ? ' with-pair' : selectedCard ? ' with-detail' : ''}`} style={layoutVars}>
+      <Resizer
+        side="left"
+        label="Resize collections sidebar"
+        width={leftWidth}
+        min={LEFT_MIN}
+        max={() => Math.min(LEFT_MAX, window.innerWidth - MAIN_MIN - (hasRight ? rightWidth : 0))}
+        defaultWidth={220}
+        onChange={setLeftW}
+        onCommit={commitLeftW}
+      />
+      {hasRight && (
+        <Resizer
+          side="right"
+          label="Resize card panel"
+          width={rightWidth}
+          min={rightMin}
+          max={() => window.innerWidth - leftWidth - MAIN_MIN}
+          defaultWidth={pairCard ? 720 : 360}
+          onChange={pairCard ? setPairW : setDetailW}
+          onCommit={pairCard ? commitPairW : commitDetailW}
+        />
+      )}
       <nav className="sidebar">
         <div className="brand">GraphMTG</div>
         <button className="primary new-deck" onClick={() => setDialog('newDeck')}>

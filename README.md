@@ -60,8 +60,8 @@ mtgcv serve --open                          # http://127.0.0.1:8000
     over-perform with it. The first use downloads each commander's EDHREC page, about 0.5 s each, then caches it for
     a week.
 
-  Drag cards to arrange them; the layout is saved per collection. **Reset layout** returns to the original
-  arrangement. Scroll to zoom and double-click empty space to fit. Hover or click a card to highlight its links.
+  Drag anywhere to pan (cards stay where the layout puts them), scroll to zoom, and double-click empty space to
+  fit. The layout is saved per collection; **Reset layout** recomputes it. Hover or click a card to highlight its links.
   Click a synergy link in the card panel to open that card alongside, with a box explaining their synergy. The
   search box highlights matching cards. It works with whole collections (tested with 2,000 cards).
 - **Board**, **Table** and **Images** views: group by category, type, mana value, color, and more. Sort by EDHREC

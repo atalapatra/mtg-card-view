@@ -205,7 +205,7 @@ export function GraphView({
 
   const reset = () => {
     if (!graph) return;
-    if (!confirm('Reset the graph to its original layout? Your manual arrangement will be lost.')) return;
+    if (!confirm('Recompute the graph layout? Cards will be rearranged.')) return;
     api.deleteGraphLayout(deckId, mode).catch(() => {});
     layout(graph, null);
   };
@@ -216,7 +216,7 @@ export function GraphView({
   }, [nodes, search, searchActive]);
 
   // Filter bar: hide non-matching cards and their links. Node objects are shared with
-  // `nodes`, so positions (and drags) are kept and saved for every card.
+  // `nodes`, so positions are kept for every card.
   const shown = useMemo(() => {
     const edges = prepared?.edges ?? [];
     if (!filterActive) return { nodes, edges };
@@ -323,7 +323,6 @@ export function GraphView({
             secondaryKey={pairKey}
             searchMatches={searchMatches}
             onSelect={onSelect}
-            onMoved={() => savePositions(nodes, mode)}
           />
         )}
         {phase.kind !== 'ready' && (
@@ -342,7 +341,7 @@ export function GraphView({
         )}
         {phase.kind === 'ready' && (
           <div className="graph-legend">
-            <span>Scroll to zoom · drag background to pan · drag cards to arrange · click for details</span>
+            <span>Scroll to zoom · drag to pan · click a card for details</span>
             {mode === 'edhrec' && (
               <span>
                 <span className="legend-hub" /> commander

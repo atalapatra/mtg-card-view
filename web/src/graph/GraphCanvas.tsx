@@ -38,7 +38,6 @@ interface Props {
   secondaryKey?: string | null;
   searchMatches: Set<string> | null;
   onSelect: (card: Card | null) => void;
-  onMoved: () => void;
   handle: Ref<GraphCanvasHandle>;
 }
 
@@ -74,7 +73,6 @@ export function GraphCanvas({
   secondaryKey = null,
   searchMatches,
   onSelect,
-  onMoved,
   handle,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -349,24 +347,25 @@ export function GraphCanvas({
     return null;
   };
 
-  const drag = useRef<
-    | { kind: 'node'; idx: number; dx: number; dy: number; sx: number; sy: number; moved: boolean }
-    | { kind: 'pan'; tx: number; ty: number; sx: number; sy: number; moved: boolean }
-    | null
-  >(null);
+  // Dragging anywhere (on a card or not) pans; cards can't be moved (D-023).
+  // A press without movement is a click: it selects the card under it, or clears the selection.
+  const drag = useRef<{ hit: number | null; tx: number; ty: number; sx: number; sy: number; moved: boolean } | null>(
+    null,
+  );
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     canvasRef.current!.setPointerCapture(e.pointerId);
     preview.hide();
     const p = toWorld(e.clientX, e.clientY);
-    const hit = hitTest(p.x, p.y);
-    if (hit != null) {
-      const n = props.current.nodes[hit];
-      drag.current = { kind: 'node', idx: hit, dx: p.x - n.x, dy: p.y - n.y, sx: e.clientX, sy: e.clientY, moved: false };
-    } else {
-      drag.current = { kind: 'pan', tx: cam.current.tx, ty: cam.current.ty, sx: e.clientX, sy: e.clientY, moved: false };
-    }
+    drag.current = {
+      hit: hitTest(p.x, p.y),
+      tx: cam.current.tx,
+      ty: cam.current.ty,
+      sx: e.clientX,
+      sy: e.clientY,
+      moved: false,
+    };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -375,16 +374,8 @@ export function GraphCanvas({
     if (d) {
       if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) d.moved = true;
       if (!d.moved) return;
-      if (d.kind === 'node') {
-        const p = toWorld(e.clientX, e.clientY);
-        const n = props.current.nodes[d.idx];
-        n.x = p.x - d.dx;
-        n.y = p.y - d.dy;
-        hover.current = d.idx;
-      } else {
-        cam.current.tx = d.tx + (e.clientX - d.sx);
-        cam.current.ty = d.ty + (e.clientY - d.sy);
-      }
+      cam.current.tx = d.tx + (e.clientX - d.sx);
+      cam.current.ty = d.ty + (e.clientY - d.sy);
       canvas.style.cursor = 'grabbing';
       requestDraw();
       return;
@@ -408,13 +399,8 @@ export function GraphCanvas({
     const d = drag.current;
     drag.current = null;
     canvasRef.current!.style.cursor = 'grab';
-    if (!d) return;
-    if (d.kind === 'node') {
-      if (d.moved) onMoved();
-      else onSelect(props.current.nodes[d.idx].card);
-    } else if (!d.moved) {
-      onSelect(null);
-    }
+    if (!d || d.moved) return;
+    onSelect(d.hit != null ? props.current.nodes[d.hit].card : null);
     void e;
   };
 

@@ -1,5 +1,6 @@
 ifeq ($(OS),Windows_NT)
-PYTHON ?= .venv/Scripts/python
+# Backslashes so cmd.exe can run it; quoted in recipes so a POSIX sh (if make picks one) keeps them too.
+PYTHON ?= .venv\Scripts\python.exe
 else
 PYTHON ?= .venv/bin/python
 endif
@@ -11,7 +12,7 @@ help:
 	@echo "make reset-cache  delete only the download cache (Scryfall/EDHREC data, re-downloaded as needed)"
 
 reset:
-	$(PYTHON) scripts/reset_data.py
+	"$(PYTHON)" scripts/reset_data.py
 
 reset-cache:
-	$(PYTHON) scripts/reset_data.py --cache
+	"$(PYTHON)" scripts/reset_data.py --cache
