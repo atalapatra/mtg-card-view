@@ -571,6 +571,7 @@ export default function App() {
                     setSelectedKey(c ? c.key : null);
                     setPairKey(null);
                   }}
+                  onPair={(c) => openLinkFromFirst(c.key)}
                   onConnections={setConnections}
                 />
               )}

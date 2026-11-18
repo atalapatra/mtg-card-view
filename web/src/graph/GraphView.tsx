@@ -13,6 +13,8 @@ interface Props {
   /** Card open in the second sidebar (from a synergy link). */
   pairKey: string | null;
   onSelect: (card: Card | null) => void;
+  /** Right-click on a card while one is selected: open it in the second sidebar. */
+  onPair: (card: Card) => void;
   /** Filter bar predicate: non-matching cards (and their links) are hidden, positions kept. */
   filter: (card: Card) => boolean;
   filterActive: boolean;
@@ -66,6 +68,7 @@ export function GraphView({
   selectedKey,
   pairKey,
   onSelect,
+  onPair,
   filter,
   filterActive,
   mode,
@@ -323,6 +326,7 @@ export function GraphView({
             secondaryKey={pairKey}
             searchMatches={searchMatches}
             onSelect={onSelect}
+            onPair={onPair}
           />
         )}
         {phase.kind !== 'ready' && (

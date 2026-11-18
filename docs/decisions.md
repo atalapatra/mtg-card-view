@@ -287,3 +287,14 @@ unsigned for now, Apple Silicon only). Extends D-021.
 - Below 900px wide, the handles are hidden and the existing stacked/overlay layout applies.
 - Implementation: `components/Resizer.tsx` (handle + `useStoredWidth`). App sets `--left-w` / `--right-w` on `.app`,
   and the grid columns use those variables.
+
+## D-025 · 2026-11-18 · Accepted
+**Graph view: right-click a card to compare it with the selected card** (requested by the user; the edge cases
+below are defaults Claude picked, open to change). Extends D-019.
+
+- With a card selected, right-clicking another card on the canvas opens it in the second sidebar with the synergy
+  box, the same as clicking a synergy link. The two cards do not need to be linked: the box then says no theme
+  links them.
+- Right-clicking the card already open in the second sidebar closes it, matching the link toggle. Right-clicking
+  the selected card, empty space, or any card when nothing is selected does nothing.
+- The browser's context menu is suppressed on the graph canvas.

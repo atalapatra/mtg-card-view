@@ -38,6 +38,8 @@ interface Props {
   secondaryKey?: string | null;
   searchMatches: Set<string> | null;
   onSelect: (card: Card | null) => void;
+  /** Right-click on a card while another is selected: compare the two (second sidebar). */
+  onPair?: (card: Card) => void;
   handle: Ref<GraphCanvasHandle>;
 }
 
@@ -73,6 +75,7 @@ export function GraphCanvas({
   secondaryKey = null,
   searchMatches,
   onSelect,
+  onPair,
   handle,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -441,6 +444,17 @@ export function GraphCanvas({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onPointerLeave={onPointerLeave}
+      onContextMenu={(e) => {
+        // Right-click a card (other than the selected one) to open it as the synergy pair.
+        e.preventDefault();
+        const { nodes, selectedKey } = props.current;
+        if (!selectedKey || !onPair) return;
+        const p = toWorld(e.clientX, e.clientY);
+        const hit = hitTest(p.x, p.y);
+        if (hit == null || nodes[hit].key === selectedKey) return;
+        preview.hide();
+        onPair(nodes[hit].card);
+      }}
       onDoubleClick={(e) => {
         const p = toWorld(e.clientX, e.clientY);
         if (hitTest(p.x, p.y) == null) fit();
