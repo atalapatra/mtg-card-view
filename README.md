@@ -62,8 +62,13 @@ mtgcv serve --open                          # http://127.0.0.1:8000
 
   Drag anywhere to pan (cards stay where the layout puts them), scroll to zoom, and double-click empty space to
   fit. The layout is saved per collection; **Reset layout** recomputes it. Hover or click a card to highlight its links.
-  Click a synergy link in the card panel to open that card alongside, with a box explaining their synergy. The
-  search box highlights matching cards. It works with whole collections (tested with 2,000 cards).
+  Click a synergy link in the card panel to open that card alongside, with a box explaining their synergy.
+  To compare the selected card with **any** other card, linked or not, right-click that card in the graph:
+  - **Windows:** right-click it.
+  - **Mac:** Control-click it, or click with two fingers on a trackpad (or right-click with a two-button mouse).
+
+  Do the same on the second card again to close the comparison. The search box highlights matching cards. It works
+  with whole collections (tested with 2,000 cards).
 - **Board**, **Table** and **Images** views: group by category, type, mana value, color, and more. Sort by EDHREC
   rank, name, MV, or price. Choose **Group by → + New custom grouping…** to make your own groups, then drag cards
   between them in the Board view. Changes save automatically.

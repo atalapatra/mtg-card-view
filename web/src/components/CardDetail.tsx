@@ -15,6 +15,8 @@ interface Props {
   onSelectKey?: (key: string) => void;
   /** Graph view: the link currently open in the other sidebar (highlighted). */
   activeLinkKey?: string | null;
+  /** Short usage hint shown under the image (graph view: how to compare with another card). */
+  hint?: string;
 }
 
 function Connections({
@@ -71,6 +73,7 @@ export function CardDetail({
   cardsByKey,
   onSelectKey,
   activeLinkKey,
+  hint,
 }: Props) {
   const [showBack, setShowBack] = useState(false);
   const img = showBack && card.image_back ? card.image_back : card.image_normal;
@@ -92,6 +95,7 @@ export function CardDetail({
           ⟲ Show {showBack ? 'front' : 'back'} face
         </button>
       )}
+      {hint && <p className="hint detail-hint">{hint}</p>}
 
       {!card.found ? (
         <p className="warn">This card wasn't found on Scryfall. Check the spelling in the card list.</p>

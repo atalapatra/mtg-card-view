@@ -34,6 +34,14 @@ export const displayName = (card: Card) =>
 
 // --- display helpers -------------------------------------------------------------
 
+/** macOS (incl. iPadOS): right-click is usually Control-click or a two-finger click. */
+export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
+
+/** Platform-specific wording for opening the synergy pair from the graph (D-025). */
+export const PAIR_HINT = IS_MAC
+  ? 'Control-click (or two-finger click) another card in the graph to compare it with this one.'
+  : 'Right-click another card in the graph to compare it with this one.';
+
 export function symbolUrl(symbol: string): string {
   // "{W/U}" -> WU.svg, "{2}" -> 2.svg
   const inner = symbol.slice(1, -1).replace(/\//g, '');

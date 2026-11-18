@@ -25,7 +25,7 @@ import type {
 } from './types';
 import { EMPTY_FILTERS, GROUP_LABELS, SORT_LABELS, UNSORTED_ID } from './types';
 import * as ops from './util';
-import { activeFilterCount, matchesFilters, matchesSearch, sortCards } from './util';
+import { activeFilterCount, matchesFilters, matchesSearch, PAIR_HINT, sortCards } from './util';
 import { FilterBar } from './components/FilterBar';
 import { Resizer, useStoredWidth } from './components/Resizer';
 
@@ -635,6 +635,7 @@ export default function App() {
             connections={isGraph ? (connections?.get(selectedCard.key) ?? []) : undefined}
             cardsByKey={cardsByKey}
             onSelectKey={openLinkFromFirst}
+            hint={isGraph ? PAIR_HINT : undefined}
           />
         )
       )}

@@ -298,3 +298,17 @@ below are defaults Claude picked, open to change). Extends D-019.
 - Right-clicking the card already open in the second sidebar closes it, matching the link toggle. Right-clicking
   the selected card, empty space, or any card when nothing is selected does nothing.
 - The browser's context menu is suppressed on the graph canvas.
+
+## D-026 · 2026-11-18 · Accepted
+**Right-click hint in the card panel** (requested by the user; placement chosen by the user from options; wording
+is Claude's default). Extends D-025.
+
+- **Hint:** in the graph view, the single-card panel shows a muted line under the card image. On Windows/Linux it
+  says "Right-click another card in the graph to compare it with this one." On macOS (detected from
+  `navigator.platform`) it says "Control-click (or two-finger click)" instead. It's hidden once the pair is open.
+  The README documents both platforms.
+- **macOS Control-click:** the browser sends a left press, then `contextmenu` on press. The canvas now drops the
+  pending press in its `contextmenu` handler, so the release doesn't select the card and close the pair.
+- A set filter was built alongside this and then dropped at the user's request before release. Note for a future
+  attempt: each card keeps only one printing (ManaBox import keeps the first, D-018), so a card owned in several sets
+  would count under one set only.

@@ -446,7 +446,10 @@ export function GraphCanvas({
       onPointerLeave={onPointerLeave}
       onContextMenu={(e) => {
         // Right-click a card (other than the selected one) to open it as the synergy pair.
+        // macOS Control-click arrives as a left press followed by contextmenu (fired on press), so drop the
+        // pending press or its pointerup would select the card and close the pair.
         e.preventDefault();
+        drag.current = null;
         const { nodes, selectedKey } = props.current;
         if (!selectedKey || !onPair) return;
         const p = toWorld(e.clientX, e.clientY);

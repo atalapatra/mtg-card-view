@@ -30,7 +30,7 @@ _Last updated: 2026-11-16_
   checkboxes to include them. The CLI auto-detects ManaBox CSVs. Binder information is not used yet.
 - **Pair comparison in the graph** (D-019): clicking a synergy link opens a second sidebar, and a box above
   both explains the pair: linking themes with payoff/enabler roles and matched tags, EDHREC commander numbers,
-  and shared categories and tags. Right-clicking another card on the canvas opens the same comparison (D-025).
+  and shared categories and tags. Right-clicking another card on the canvas (Control-click on Mac) opens the same comparison (D-025, D-026).
 - Tests: 29 offline pytest tests (parser, client, tags, analysis, API, synergy, EDHREC, ManaBox import, pair explain)
 - Verified manually: a live run against Scryfall, plus a headless-Edge CDP script that performs a real mouse
   drag between groups and confirms it persisted (the script lived in the session scratchpad and is not in the repo)
