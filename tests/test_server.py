@@ -20,7 +20,8 @@ def api(tmp_path, monkeypatch):
     edhrec_http = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(404)))
     app = create_app(store=DeckStore(tmp_path / "decks.sqlite3"),
                      client=make_client(tmp_path, []), web_dist=None,
-                     edhrec=EdhrecClient(cache_dir=tmp_path, http=edhrec_http, interval=0))
+                     edhrec=EdhrecClient(cache_dir=tmp_path, http=edhrec_http, interval=0),
+                     graph_modes={"tags": True, "edhrec": True, "lift": True})  # independent of features.py
     return TestClient(app)
 
 
@@ -51,6 +52,7 @@ def test_graph_endpoints(api):
     assert r.status_code == 200 and r.json()["status"] == "ready"
     g = r.json()["graph"]
     assert len(g["nodes"]) == 5 and r.json()["layout"] is None
+    assert api.get("/api/config").json() == {"graph_modes": ["tags", "edhrec", "lift"]}
 
     # EDHREC mode: the Commander-section card is a hub; its page is fetched in the
     # background (mock returns 404), so poll until ready.
@@ -64,6 +66,10 @@ def test_graph_endpoints(api):
     g = r.json()["graph"]
     assert g["hubs"] == ["commander:Sol Ring"] and g["meta"]["missing_pages"] == ["Sol Ring"]
     assert g["edges"] == []
+    # Lift mode shares the cached pages, so it's ready immediately.
+    r = api.get(f"/api/decks/{deck_id}/graph", params={"mode": "lift"})
+    assert r.json()["status"] == "ready" and r.json()["graph"]["mode"] == "lift"
+    assert r.json()["graph"]["hubs"] == ["commander:Sol Ring"]
     assert api.get(f"/api/decks/{deck_id}/graph", params={"mode": "bogus"}).status_code == 422
 
     pos = {"main:Wrath of God": [1.5, -2.0]}
@@ -131,3 +137,31 @@ def test_empty_seed_and_validation(api):
     assert board["layout"] == {"groups": []}
     assert api.post("/api/decks", json={"name": "", "text": DECK}).status_code == 422
     assert api.post(f"/api/decks/{deck_id}/boards", json={"name": "x", "seed": "bogus"}).status_code == 422
+
+
+def test_disabled_graph_modes(tmp_path, monkeypatch):
+    """EDHREC modes off: rejected by the API, no EDHREC client, no EDHREC requests."""
+    monkeypatch.setattr("mtgcv.scryfall.MIN_INTERVAL", 0)
+
+    def no_edhrec_client(*args, **kwargs):
+        raise AssertionError("EdhrecClient created with EDHREC modes disabled")
+
+    monkeypatch.setattr("mtgcv.server.EdhrecClient", no_edhrec_client)
+    app = create_app(store=DeckStore(tmp_path / "decks.sqlite3"), client=make_client(tmp_path, []), web_dist=None,
+                     graph_modes={"tags": True, "edhrec": False, "lift": False})
+    api = TestClient(app)
+    assert api.get("/api/config").json() == {"graph_modes": ["tags"]}
+    deck_id = api.post("/api/decks", json={"name": "D", "text": DECK}).json()["deck"]["id"]
+    assert api.get(f"/api/decks/{deck_id}/graph", params={"mode": "tags"}).json()["status"] == "ready"
+    for mode in ("edhrec", "lift"):
+        r = api.get(f"/api/decks/{deck_id}/graph", params={"mode": mode})
+        assert r.status_code == 404 and "disabled" in r.json()["detail"]
+    r = api.get(f"/api/decks/{deck_id}/pair", params={"a": "commander:Sol Ring", "b": "main:Wrath of God"})
+    assert r.status_code == 200 and r.json()["edhrec"] is None
+    assert not (tmp_path / "edhrec.sqlite3").exists()
+
+
+def test_at_least_one_graph_mode(tmp_path):
+    with pytest.raises(ValueError):
+        create_app(store=DeckStore(tmp_path / "decks.sqlite3"), client=make_client(tmp_path, []), web_dist=None,
+                   graph_modes={"tags": False, "edhrec": False, "lift": False})

@@ -118,12 +118,12 @@ export interface ImportResult {
 export type ViewMode ='board' | 'table' | 'grid' | 'graph';
 
 // --- synergy graph (src/mtgcv/synergy.py Graph.to_dict, server.py /graph) ---
-export type GraphMode = 'tags' | 'edhrec';
+export type GraphMode = 'tags' | 'edhrec' | 'lift';
 
 export interface GraphData {
   mode: GraphMode;
   nodes: string[]; // card keys
-  hubs: string[]; // commander card keys (edhrec mode)
+  hubs: string[]; // commander card keys (edhrec / lift modes)
   edges: [number, number, number, number][]; // [sourceIdx, targetIdx, rawWeight, labelIdx | -1]
   labels: string[];
   unconnected: number;
@@ -153,13 +153,14 @@ export interface PairEdhrec {
   synergy?: number;
   num_decks?: number;
   potential_decks?: number;
+  lift?: number | null;
 }
 
 export interface PairExplanation {
   a: string;
   b: string;
   themes: PairTheme[];
-  edhrec: PairEdhrec[];
+  edhrec: PairEdhrec[] | null; // null = EDHREC graph modes disabled (features.py)
   shared_categories: string[];
   shared_tags: string[];
 }

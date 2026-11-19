@@ -92,7 +92,7 @@ def test_edhrec_graph():
         card("Grizzly Bears", "Creature — Bear"),
     )
     page = CommanderPage(slug="atraxa-praetors-voice", num_decks=100,
-                         cards={"doubling season": (0.45, 50, 100), "sol ring": (0.0, 90, 100)})
+                         cards={"doubling season": (0.45, 50, 100, 3.2), "sol ring": (0.0, 90, 100, 1.0)})
     assert [h.name for h in commander_hubs(cards)] == ["Atraxa, Praetors' Voice"]
     g = build_edhrec_graph(cards, {"atraxa-praetors-voice": page})
     edges = edge_names(g)
@@ -103,11 +103,17 @@ def test_edhrec_graph():
     g2 = build_edhrec_graph(cards, {})
     assert g2.meta["missing_pages"] == ["Atraxa, Praetors' Voice"]
 
+    # Lift mode: same hubs, weighted by lift; lift <= 1 (Sol Ring) is no edge.
+    g3 = build_edhrec_graph(cards, {"atraxa-praetors-voice": page}, metric="lift")
+    assert g3.mode == "lift"
+    assert edge_names(g3) == {("Atraxa, Praetors' Voice", "Doubling Season"): (3.2, None)}
+
 
 def test_edhrec_page_parse_and_cache(tmp_path):
     calls = []
     payload = {"container": {"json_dict": {"card": {"num_decks": 1234}, "cardlists": [
-        {"cardviews": [{"name": "Doubling Season", "synergy": 0.4, "num_decks": 10, "potential_decks": 20}]}]}}}
+        {"cardviews": [{"name": "Doubling Season", "synergy": 0.4, "lift": 2.5, "num_decks": 10,
+                        "potential_decks": 20}]}]}}}
 
     def handler(req):
         calls.append(req.url.path)
@@ -117,10 +123,15 @@ def test_edhrec_page_parse_and_cache(tmp_path):
 
     client = EdhrecClient(cache_dir=tmp_path, http=httpx.Client(transport=httpx.MockTransport(handler)), interval=0)
     page = client.fetch("atraxa-praetors-voice")
-    assert page.num_decks == 1234 and page.cards["doubling season"] == (0.4, 10, 20)
+    assert page.num_decks == 1234 and page.cards["doubling season"] == (0.4, 10, 20, 2.5)
     assert client.fetch("not-a-commander") is None
     assert client.missing(["atraxa-praetors-voice", "not-a-commander", "other"]) == ["other"]
     assert client.get_pages(["atraxa-praetors-voice"])["atraxa-praetors-voice"].cards == page.cards
+
+    # Entries cached before lift was stored (no format version) count as not cached, so they're re-fetched.
+    client._db.execute("UPDATE pages SET data = ? WHERE slug = ?",
+                       ('{"num_decks": 1, "cards": {"doubling season": [0.4, 10, 20]}}', "atraxa-praetors-voice"))
+    assert client.missing(["atraxa-praetors-voice"]) == ["atraxa-praetors-voice"]
 
 
 def test_explain_pair_themes_and_typal():
@@ -153,11 +164,12 @@ def test_explain_pair_edhrec_statuses():
     )
     atraxa, season, bears = cards
     page = CommanderPage(slug="atraxa-praetors-voice", num_decks=1000,
-                         cards={"doubling season": (0.45, 500, 900)})
+                         cards={"doubling season": (0.45, 500, 900, 1.9)})
     pages = {"atraxa-praetors-voice": page}
     [e] = explain_pair(season, atraxa, idx, pages)["edhrec"]
     assert e == {"commander": "main:Atraxa, Praetors' Voice", "card": "main:Doubling Season", "status": "listed",
-                 "commander_decks": 1000, "synergy": 0.45, "num_decks": 500, "potential_decks": 900}
+                 "commander_decks": 1000, "synergy": 0.45, "num_decks": 500, "potential_decks": 900,
+                 "lift": 1.9}
     assert explain_pair(atraxa, bears, idx, pages)["edhrec"][0]["status"] == "not_listed"
     assert explain_pair(atraxa, bears, idx, {})["edhrec"][0]["status"] == "not_downloaded"
     assert explain_pair(atraxa, bears, idx, {"atraxa-praetors-voice": None})["edhrec"][0]["status"] == "no_page"

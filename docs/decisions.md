@@ -312,3 +312,31 @@ is Claude's default). Extends D-025.
 - A set filter was built alongside this and then dropped at the user's request before release. Note for a future
   attempt: each card keeps only one printing (ManaBox import keeps the first, D-018), so a card owned in several sets
   would count under one set only.
+
+## D-027 · 2026-11-19 · Accepted
+**EDHREC lift as a third graph weighting** (requested by the user; label, slider range and default threshold are
+Claude's defaults, open to change). Extends D-014..D-017.
+
+- New graph mode `lift` ("EDHREC lift" button, after the two existing ones). It builds the same commander <-> card
+  graph as `edhrec` (same hubs, top 5 commanders per card, basic lands excluded) but weights edges by lift instead of
+  synergy. Edges need lift > 1. Layouts are saved separately per mode, as before.
+- Lift = inclusion rate with the commander / rate in all decks of those colors. Its ceiling varies a lot by commander
+  (Atraxa about 1.7×, Krenko about 8×), so the slider runs 1–8× with a default of 1.2×, and edge strength is
+  log-scaled (8× = full).
+- The two-card synergy box shows lift next to synergy for listed cards.
+- `CommanderPage` now stores lift. The EDHREC cache gained a format version, so pages cached without lift are
+  re-fetched (once) the next time an EDHREC mode is opened.
+
+## D-028 · 2026-11-19 · Accepted
+**Each graph view can be switched off in code** (requested by the user, e.g. to stop the app pulling data from
+EDHREC; the mechanism is Claude's default).
+
+- `src/mtgcv/features.py` holds `GRAPH_MODES = {"tags": True, "edhrec": True, "lift": True}`. Edit it and restart
+  (or rebuild the exe). No env var or UI setting, by design: it's a build-time choice.
+- The server is the single authority. `/api/config` returns the enabled modes in display order, and the UI shows only
+  those buttons, falling back to the first enabled mode. `/api/decks/{id}/graph` returns 404 for a disabled mode.
+- With both EDHREC modes (`edhrec`, `lift`) off, `create_app` never constructs an `EdhrecClient`, so there is no HTTP
+  client for EDHREC and no `edhrec.sqlite3`. The pair endpoint returns `"edhrec": null` and the synergy box drops its
+  EDHREC section. EDHREC rank and the "EDHREC" card link come from Scryfall data and are unaffected.
+- At least one mode must stay enabled (the graph is the main view); otherwise the server refuses to start.
+

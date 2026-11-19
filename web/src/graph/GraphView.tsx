@@ -20,18 +20,33 @@ interface Props {
   filterActive: boolean;
   /** Weighting mode; owned by App so it defaults to tags on load but survives view switches. */
   mode: GraphMode;
+  /** Enabled modes, in display order (src/mtgcv/features.py via /api/config). */
+  modes: GraphMode[];
   onModeChange: (m: GraphMode) => void;
   /** Reports each card's connections (for the detail panel). */
   onConnections: (conns: Map<string, Connection[]> | null) => void;
 }
 
-/** Map raw edge weight to 0..1 for drawing / layout. */
+const MODE_LABELS: Record<GraphMode, string> = {
+  tags: 'Scryfall tag synergy',
+  edhrec: 'EDHREC commander synergy',
+  lift: 'EDHREC lift',
+};
+
+/** Modes built from EDHREC commander pages (commander hubs, background page download). */
+const isEdhrecMode = (mode: GraphMode) => mode === 'edhrec' || mode === 'lift';
+
+/** Map raw edge weight to 0..1 for drawing / layout. Lift is a ratio, so it's log-scaled (8x = full). */
 function normalize(mode: GraphMode, raw: number): number {
-  return mode === 'tags' ? Math.min(1, raw / 3) : Math.min(1, Math.max(0, raw) / 0.4);
+  if (mode === 'tags') return Math.min(1, raw / 3);
+  if (mode === 'lift') return Math.min(1, Math.max(0, Math.log(raw)) / Math.log(8));
+  return Math.min(1, Math.max(0, raw) / 0.4);
 }
 
 function edgeLabel(mode: GraphMode, g: GraphData, e: GraphData['edges'][number]): string {
-  return mode === 'tags' ? g.labels[e[3]] ?? '' : `${e[2] >= 0 ? '+' : ''}${Math.round(e[2] * 100)}% EDHREC synergy`;
+  if (mode === 'tags') return g.labels[e[3]] ?? '';
+  if (mode === 'lift') return `${e[2].toFixed(1)}× EDHREC lift`;
+  return `${e[2] >= 0 ? '+' : ''}${Math.round(e[2] * 100)}% EDHREC synergy`;
 }
 
 function runLayout(req: LayoutRequest, onProgress: (p: number) => void): { promise: Promise<Positions>; cancel: () => void } {
@@ -72,13 +87,14 @@ export function GraphView({
   filter,
   filterActive,
   mode,
+  modes,
   onModeChange: setMode,
   onConnections,
 }: Props) {
   const [phase, setPhase] = useState<Phase>({ kind: 'fetching' });
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [nodes, setNodes] = useState<GNode[]>([]);
-  const [minRaw, setMinRaw] = useState<Record<GraphMode, number>>({ tags: 1, edhrec: 0.05 });
+  const [minRaw, setMinRaw] = useState<Record<GraphMode, number>>({ tags: 1, edhrec: 0.05, lift: 1.2 });
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const canvas = useRef<GraphCanvasHandle>(null);
   const layoutJob = useRef<{ cancel: () => void } | null>(null);
@@ -255,12 +271,11 @@ export function GraphView({
     <div className="graph-view">
       <div className="graph-toolbar">
         <div className="segmented" role="tablist" aria-label="Weighting">
-          <button className={mode === 'tags' ? 'on' : ''} onClick={() => setMode('tags')}>
-            Scryfall tag synergy
-          </button>
-          <button className={mode === 'edhrec' ? 'on' : ''} onClick={() => setMode('edhrec')}>
-            EDHREC commander synergy
-          </button>
+          {modes.map((m) => (
+            <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
+              {MODE_LABELS[m]}
+            </button>
+          ))}
         </div>
 
         {mode === 'tags' ? (
@@ -271,6 +286,19 @@ export function GraphView({
               <option value={2}>2+ shared themes</option>
               <option value={3}>3+ shared themes</option>
             </select>
+          </label>
+        ) : mode === 'lift' ? (
+          <label className="field">
+            Min lift
+            <input
+              type="range"
+              min={1}
+              max={8}
+              step={0.1}
+              value={threshold}
+              onChange={(e) => setMinRaw({ ...minRaw, lift: Number(e.target.value) })}
+            />
+            <span className="range-value">{threshold.toFixed(1)}×</span>
           </label>
         ) : (
           <label className="field">
@@ -290,7 +318,7 @@ export function GraphView({
         <span className="graph-stats muted">
           {prepared &&
             `${filterActive ? `${shown.nodes.length.toLocaleString()} of ` : ''}${nodes.length.toLocaleString()} cards · ${connectedCount.toLocaleString()} connected · ${visibleEdges.toLocaleString()} links`}
-          {graph?.mode === 'edhrec' && ` · ${graph.hubs.length} commanders`}
+          {graph && isEdhrecMode(graph.mode) && ` · ${graph.hubs.length} commanders`}
         </span>
 
         <span className="spacer" />
@@ -305,14 +333,14 @@ export function GraphView({
         </button>
       </div>
 
-      {graph?.mode === 'edhrec' && (graph.meta.missing_pages?.length ?? 0) > 0 && (
+      {graph && isEdhrecMode(graph.mode) && (graph.meta.missing_pages?.length ?? 0) > 0 && (
         <p className="hint">
           No EDHREC page for: {graph.meta.missing_pages!.slice(0, 8).join(', ')}
           {graph.meta.missing_pages!.length > 8 && ` and ${graph.meta.missing_pages!.length - 8} more`}
         </p>
       )}
-      {graph?.mode === 'edhrec' && graph.hubs.length === 0 && (
-        <p className="hint">No legendary creatures in this collection — EDHREC synergy needs at least one commander.</p>
+      {graph && isEdhrecMode(graph.mode) && graph.hubs.length === 0 && (
+        <p className="hint">No legendary creatures in this collection — EDHREC data needs at least one commander.</p>
       )}
 
       <div className="graph-stage">
@@ -346,7 +374,7 @@ export function GraphView({
         {phase.kind === 'ready' && (
           <div className="graph-legend">
             <span>Scroll to zoom · drag to pan · click a card for details</span>
-            {mode === 'edhrec' && (
+            {isEdhrecMode(mode) && (
               <span>
                 <span className="legend-hub" /> commander
               </span>

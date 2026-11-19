@@ -67,7 +67,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   // Graph is the main view: the app always opens on it (D-020).
   const [view, setView] = useState<ViewMode>('graph');
-  const [graphMode, setGraphMode] = useState<GraphMode>('tags'); // default: Scryfall tag synergy
+  const [graphMode, setGraphMode] = useState<GraphMode>('tags'); // default: first enabled mode (tags unless disabled)
+  // Enabled graph modes from the server (src/mtgcv/features.py); the graph waits for this.
+  const [graphModes, setGraphModes] = useState<GraphMode[] | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [connections, setConnections] = useState<Map<string, Connection[]> | null>(null);
@@ -82,6 +84,13 @@ export default function App() {
       .health()
       .then((h) => setVersion(h.version))
       .catch(() => {});
+    api
+      .config()
+      .then((c) => {
+        setGraphModes(c.graph_modes);
+        setGraphMode((m) => (c.graph_modes.includes(m) ? m : c.graph_modes[0]));
+      })
+      .catch((e) => setError(`Couldn't load app settings: ${e instanceof Error ? e.message : String(e)}`));
   }, []);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -555,7 +564,7 @@ export default function App() {
                 <TableView groups={groups} selectedKey={selectedKey} onSelect={select} sort={sort} onSort={setSort} />
               )}
               {view === 'grid' && <GridView groups={groups} selectedKey={selectedKey} onSelect={select} />}
-              {isGraph && (
+              {isGraph && graphModes && (
                 <GraphView
                   deckId={detail.deck.id}
                   cardsByKey={cardsByKey}
@@ -564,6 +573,7 @@ export default function App() {
                   filter={filterFn}
                   filterActive={filterCount > 0}
                   mode={graphMode}
+                  modes={graphModes}
                   onModeChange={setGraphMode}
                   selectedKey={selectedKey}
                   pairKey={pairKey}

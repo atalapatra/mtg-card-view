@@ -67,6 +67,7 @@ server.py      FastAPI app (create_app) — /api/decks, /api/boards, /api/analyz
 launcher.py    GraphMTG.exe / .app / `graphmtg`: single instance via <data dir>/server.json, free port, opens browser
 macapp.py      macOS menu-bar front end for GraphMTG.app (rumps; server in a background thread)
 edhrec.py      EdhrecClient (unofficial JSON, cached, 0.5 s/request) + EdhrecFetcher (background jobs)
+features.py    GRAPH_MODES on/off switches (EDHREC modes off = no EDHREC client, no requests); /api/config
 synergy.py     THEMES (payoff <-> enabler), build_tag_graph, build_edhrec_graph, commander_hubs, explain_pair
 
 web/src/

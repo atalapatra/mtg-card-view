@@ -9,6 +9,8 @@ Two weighting modes (see docs/decisions.md D-014..D-017):
 * ``edhrec`` – commander <-> card edges weighted by EDHREC synergy. Every
   legendary creature (or "can be your commander" card, or card in the Commander
   section) in the list is a hub.
+* ``lift``   – the same commander <-> card edges, weighted by EDHREC lift instead
+  (inclusion rate with the commander / rate in all decks of those colors).
 
 Both builders cap edges per card (top-k by weight) so libraries of thousands of
 cards stay drawable. Cards with no edges are reported as unconnected.
@@ -28,6 +30,7 @@ from mtgcv.scryfall import TagIndex, front_face, normalize_name
 TAG_EDGES_PER_CARD = 8
 EDHREC_EDGES_PER_CARD = 5
 EDHREC_MIN_SYNERGY = 0.01
+EDHREC_MIN_LIFT = 1.0  # lift <= 1: played no more often than in any deck of those colors
 
 # --- themes --------------------------------------------------------------------------
 
@@ -280,7 +283,14 @@ def commander_hubs(cards: list[CardInfo]) -> list[CardInfo]:
 
 
 def build_edhrec_graph(cards: list[CardInfo], pages: dict[str, CommanderPage | None],
-                       k: int = EDHREC_EDGES_PER_CARD, min_synergy: float = EDHREC_MIN_SYNERGY) -> Graph:
+                       k: int = EDHREC_EDGES_PER_CARD, min_weight: float | None = None,
+                       metric: str = "synergy") -> Graph:
+    """Commander <-> card graph. ``metric`` is "synergy" (mode ``edhrec``) or "lift"
+    (mode ``lift``); edges at or below ``min_weight`` are dropped."""
+    if metric not in ("synergy", "lift"):
+        raise ValueError(f"unknown EDHREC metric: {metric}")
+    if min_weight is None:
+        min_weight = EDHREC_MIN_SYNERGY if metric == "synergy" else EDHREC_MIN_LIFT
     cards = sorted((c for c in cards if c.found), key=lambda c: c.key)
     index = {c.key: i for i, c in enumerate(cards)}
     by_name: dict[str, list[int]] = defaultdict(list)
@@ -296,13 +306,15 @@ def build_edhrec_graph(cards: list[CardInfo], pages: dict[str, CommanderPage | N
             missing_pages.append(hub.name)
             continue
         h = index[hub.key]
-        for name, (syn, _n, _p) in page.cards.items():
-            if syn < min_synergy:
+        for name, stats in page.cards.items():
+            w = stats[0] if metric == "synergy" else stats[3]
+            if w is None or w < min_weight or (metric == "lift" and w <= min_weight):
                 continue
             for i in by_name.get(name, []):
                 # Basic lands carry a color-identity "synergy" that says nothing about the card.
                 if i != h and "Basic" not in cards[i].type_line:
-                    weights[(min(h, i), max(h, i))] = max(weights.get((min(h, i), max(h, i)), 0.0), syn)
+                    pair = (min(h, i), max(h, i))
+                    weights[pair] = max(weights.get(pair, w), w)
 
     # Cap per *non-hub* card so each card links to its best few commanders; hubs keep all.
     hub_idx = {index[h.key] for h in hubs}
@@ -317,7 +329,8 @@ def build_edhrec_graph(cards: list[CardInfo], pages: dict[str, CommanderPage | N
         keep.update(p for _, p in lst[:k])
 
     edges = [(a, b, round(weights[(a, b)], 4), -1) for a, b in sorted(keep)]
-    return Graph(mode="edhrec", nodes=[c.key for c in cards], hubs=[h.key for h in hubs], edges=edges,
+    return Graph(mode="edhrec" if metric == "synergy" else "lift", nodes=[c.key for c in cards],
+                 hubs=[h.key for h in hubs], edges=edges,
                  meta={"commanders": len(hubs), "missing_pages": missing_pages})
 
 
@@ -379,8 +392,8 @@ def explain_edhrec_pair(a: CardInfo, b: CardInfo,
                 stats = page.cards.get(normalize_name(front_face(card.name)))
                 entry["commander_decks"] = page.num_decks
                 if stats:
-                    syn, num, potential = stats
-                    entry.update(status="listed", synergy=syn, num_decks=num, potential_decks=potential)
+                    syn, num, potential, lift = stats
+                    entry.update(status="listed", synergy=syn, num_decks=num, potential_decks=potential, lift=lift)
                 else:
                     entry["status"] = "not_listed"
         out.append(entry)
@@ -388,13 +401,14 @@ def explain_edhrec_pair(a: CardInfo, b: CardInfo,
 
 
 def explain_pair(a: CardInfo, b: CardInfo, tags: TagIndex,
-                 pages: dict[str, CommanderPage | None]) -> dict:
+                 pages: dict[str, CommanderPage | None] | None) -> dict:
+    """``pages`` None = EDHREC disabled (features.GRAPH_MODES); ``edhrec`` is then None."""
     ta, tb = tags.tags_for(a.oracle_id), tags.tags_for(b.oracle_id)
     return {
         "a": a.key,
         "b": b.key,
         "themes": explain_tag_pair(a, b, tags),
-        "edhrec": explain_edhrec_pair(a, b, pages),
+        "edhrec": explain_edhrec_pair(a, b, pages) if pages is not None else None,
         "shared_categories": [c for c in a.categories if c in b.categories],
         "shared_tags": sorted(ta & tb),
     }

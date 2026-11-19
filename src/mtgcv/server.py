@@ -40,6 +40,7 @@ from mtgcv.analyze import GROUP_MODES, Report, build_report, group_cards
 from mtgcv.categories import CATEGORIES
 from mtgcv.decklist import parse_decklist
 from mtgcv.edhrec import EdhrecClient, EdhrecFetcher, edhrec_slug
+from mtgcv.features import edhrec_enabled, enabled_graph_modes
 from mtgcv.importers import manabox_to_decklist
 from mtgcv.scryfall import ScryfallClient, TagIndex
 from mtgcv.store import DeckStore, NotFound
@@ -118,7 +119,7 @@ class ManaboxIn(BaseModel):
     include_lists: bool = False
 
 
-GraphMode = Literal["tags", "edhrec"]
+GraphMode = Literal["tags", "edhrec", "lift"]
 
 
 class GraphLayoutIn(BaseModel):
@@ -175,12 +176,16 @@ class Analyzer:
 
 
 def create_app(store: DeckStore | None = None, client: ScryfallClient | None = None,
-               web_dist: Path | None = WEB_DIST, edhrec: EdhrecClient | None = None) -> FastAPI:
+               web_dist: Path | None = WEB_DIST, edhrec: EdhrecClient | None = None,
+               graph_modes: dict[str, bool] | None = None) -> FastAPI:
+    """``graph_modes`` overrides features.GRAPH_MODES (tests)."""
     app = FastAPI(title="mtg-card-view")
     app.add_middleware(GZipMiddleware, minimum_size=2000)  # big libraries -> multi-MB JSON
     store = store or DeckStore()
     analyzer = Analyzer(client or ScryfallClient())
-    fetcher = EdhrecFetcher(edhrec or EdhrecClient())
+    modes = enabled_graph_modes(graph_modes)
+    # No EDHREC mode enabled -> no EDHREC client at all, so nothing can reach EDHREC.
+    fetcher = EdhrecFetcher(edhrec or EdhrecClient()) if edhrec_enabled(modes) else None
 
     def deck_summary(deck: dict) -> dict:
         parsed = parse_decklist(deck["text"])
@@ -203,6 +208,11 @@ def create_app(store: DeckStore | None = None, client: ScryfallClient | None = N
     def health() -> dict:
         """Identifies a running GraphMTG (used by the launcher's single-instance check)."""
         return {"app": APP_ID, "version": __version__}
+
+    @app.get("/api/config")
+    def config() -> dict:
+        """Which features are enabled (src/mtgcv/features.py)."""
+        return {"graph_modes": modes}
 
     @app.post("/api/analyze")
     def analyze(body: AnalyzeIn) -> dict:
@@ -270,9 +280,11 @@ def create_app(store: DeckStore | None = None, client: ScryfallClient | None = N
     # --- synergy graph ---------------------------------------------------------
     @app.get("/api/decks/{deck_id}/graph")
     def get_graph(deck_id: int, mode: GraphMode = "tags") -> dict:
-        """Graph for one weighting mode. In ``edhrec`` mode, missing commander pages
+        """Graph for one weighting mode. In ``edhrec`` and ``lift`` modes, missing commander pages
         are fetched in the background; the response is ``{"status": "loading",
         "progress": ...}`` until they're all cached — poll again."""
+        if mode not in modes:
+            raise HTTPException(404, f"Graph mode disabled: {mode}")
         deck = get_or_404(store.get_deck, deck_id)
         if mode == "tags":
             graph = analyzer.tag_graph(deck["text"])
@@ -282,7 +294,8 @@ def create_app(store: DeckStore | None = None, client: ScryfallClient | None = N
             job = fetcher.ensure(deck_id, slugs)
             if job is not None:
                 return {"status": "loading", "progress": {"done": job.done, "total": job.total}}
-            graph = build_edhrec_graph(report.cards, fetcher.client.get_pages(slugs))
+            graph = build_edhrec_graph(report.cards, fetcher.client.get_pages(slugs),
+                                       metric="synergy" if mode == "edhrec" else "lift")
         return {"status": "ready", "graph": graph.to_dict(), "layout": store.get_layout(deck_id, mode)}
 
     @app.get("/api/decks/{deck_id}/pair")
@@ -295,6 +308,8 @@ def create_app(store: DeckStore | None = None, client: ScryfallClient | None = N
         if a not in by_key or b not in by_key:
             raise HTTPException(404, "Card not in this deck")
         ca, cb = by_key[a], by_key[b]
+        if fetcher is None:
+            return explain_pair(ca, cb, analyzer.tag_index(), None)
         slugs = [edhrec_slug(c.name) for c in (ca, cb) if is_commander_candidate(c)]
         return explain_pair(ca, cb, analyzer.tag_index(), fetcher.client.get_pages(slugs))
 

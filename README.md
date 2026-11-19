@@ -53,12 +53,16 @@ mtgcv serve --open                          # http://127.0.0.1:8000
   wishlist lists are left out unless you tick their checkboxes. Collections are saved in
   `%APPDATA%\mtg-card-view\decks.sqlite3`. Delete one from the header's **Delete** button or the × next to it in the sidebar.
 - **Graph** (the main view; the app always opens on it, with **Scryfall tag synergy**): cards as images in a
-  synergy network. Two weightings are available:
+  synergy network. Three weightings are available:
   - **Scryfall tag synergy** links payoffs to enablers (e.g. "lifegain matters" ↔ lifegain cards; see `THEMES` in
     `src/mtgcv/synergy.py`).
   - **EDHREC commander synergy** links every legendary creature in the collection to the cards EDHREC says
     over-perform with it. The first use downloads each commander's EDHREC page, about 0.5 s each, then caches it for
     a week.
+  - **EDHREC lift** uses the same commander pages, weighted by lift instead: how many times more often a card is
+    played with that commander than in all decks of its colors. Synergy is a difference in play rate, so it favors
+    staples of the deck; lift is a ratio, so it favors niche cards that are rare elsewhere. Lift's range depends on the
+    commander (about 1.7× at most for a five-color commander, 8× for a mono-color one), so the default threshold is low.
 
   Drag anywhere to pan (cards stay where the layout puts them), scroll to zoom, and double-click empty space to
   fit. The layout is saved per collection; **Reset layout** recomputes it. Hover or click a card to highlight its links.

@@ -28,6 +28,8 @@ from mtgcv.cache import default_cache_dir
 from mtgcv.scryfall import front_face, normalize_name
 
 BASE = "https://json.edhrec.com/pages/commanders"
+# Bump when CommanderPage.to_json changes shape; older cache entries are re-fetched. v2 added lift.
+CACHE_FORMAT = 2
 REQUEST_INTERVAL = 0.5
 PAGE_TTL = 7 * 24 * 3600
 MISSING_TTL = 24 * 3600
@@ -46,29 +48,34 @@ def edhrec_slug(name: str) -> str:
 class CommanderPage:
     slug: str
     num_decks: int = 0
-    # normalized card name -> (synergy, num_decks, potential_decks)
-    cards: dict[str, tuple[float, int, int]] = field(default_factory=dict)
+    # normalized card name -> (synergy, num_decks, potential_decks, lift); lift None if absent
+    cards: dict[str, tuple[float, int, int, float | None]] = field(default_factory=dict)
 
     @classmethod
     def parse(cls, slug: str, data: dict) -> "CommanderPage":
         jd = (data.get("container") or {}).get("json_dict") or {}
-        cards: dict[str, tuple[float, int, int]] = {}
+        cards: dict[str, tuple[float, int, int, float | None]] = {}
         for lst in jd.get("cardlists") or []:
             for cv in lst.get("cardviews") or []:
                 name, syn = cv.get("name"), cv.get("synergy")
                 if not name or syn is None:
                     continue
                 key = normalize_name(front_face(name))
-                cards[key] = (float(syn), int(cv.get("num_decks") or 0), int(cv.get("potential_decks") or 0))
+                lift = cv.get("lift")
+                cards[key] = (float(syn), int(cv.get("num_decks") or 0), int(cv.get("potential_decks") or 0),
+                              float(lift) if lift is not None else None)
         num = data.get("num_decks_avg") or (jd.get("card") or {}).get("num_decks") or 0
         return cls(slug=slug, num_decks=int(num), cards=cards)
 
     def to_json(self) -> str:
-        return json.dumps({"num_decks": self.num_decks, "cards": self.cards})
+        return json.dumps({"v": CACHE_FORMAT, "num_decks": self.num_decks, "cards": self.cards})
 
     @classmethod
-    def from_json(cls, slug: str, s: str) -> "CommanderPage":
+    def from_json(cls, slug: str, s: str) -> "CommanderPage | None":
+        """None if the entry predates the current cache format (re-fetch it)."""
         d = json.loads(s)
+        if d.get("v") != CACHE_FORMAT:
+            return None
         return cls(slug=slug, num_decks=d["num_decks"], cards={k: tuple(v) for k, v in d["cards"].items()})
 
 
@@ -105,7 +112,9 @@ class EdhrecClient:
                     if data is None and now - at < MISSING_TTL:
                         out[slug] = None
                     elif data is not None and now - at < PAGE_TTL:
-                        out[slug] = CommanderPage.from_json(slug, data)
+                        page = CommanderPage.from_json(slug, data)
+                        if page is not None:  # old-format entries count as not cached
+                            out[slug] = page
         return out
 
     def missing(self, slugs: list[str]) -> list[str]:

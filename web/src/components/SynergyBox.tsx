@@ -86,20 +86,22 @@ export function SynergyBox({ deckId, a, b, cardsByKey, tagDescriptions, onClose,
             )}
           </div>
 
-          <div>
-            <h4>EDHREC</h4>
-            {data.edhrec.length === 0 ? (
-              <p className="muted">Neither card is a commander, so EDHREC has no data for this pair.</p>
-            ) : (
-              <ul className="synergy-list">
-                {data.edhrec.map((e, i) => (
-                  <li key={i}>
-                    <EdhrecLine e={e} name={name} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {data.edhrec && (
+            <div>
+              <h4>EDHREC</h4>
+              {data.edhrec.length === 0 ? (
+                <p className="muted">Neither card is a commander, so EDHREC has no data for this pair.</p>
+              ) : (
+                <ul className="synergy-list">
+                  {data.edhrec.map((e, i) => (
+                    <li key={i}>
+                      <EdhrecLine e={e} name={name} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           <div>
             <h4>In common</h4>
@@ -140,12 +142,14 @@ function EdhrecLine({ e, name }: { e: PairEdhrec; name: (key: string) => React.R
           <strong className={syn > 0 ? 'syn-pos' : 'syn-neg'}>
             {syn >= 0 ? '+' : ''}
             {syn}% synergy
-          </strong>{' '}
-          for {name(e.card)} with commander {name(e.commander)}
+          </strong>
+          {e.lift != null && <strong> · {e.lift.toFixed(1)}× lift</strong>} for {name(e.card)} with commander{' '}
+          {name(e.commander)}
           {pct != null && (
             <span className="muted">
               {' '}
-              · in {(e.num_decks ?? 0).toLocaleString()} of {(e.potential_decks ?? 0).toLocaleString()} eligible decks ({pct}
+              · in {(e.num_decks ?? 0).toLocaleString()} of {(e.potential_decks ?? 0).toLocaleString()} eligible decks (
+              {pct}
               %)
             </span>
           )}
@@ -163,8 +167,8 @@ function EdhrecLine({ e, name }: { e: PairEdhrec; name: (key: string) => React.R
     default:
       return (
         <>
-          EDHREC data for {name(e.commander)} isn't downloaded yet. Switch the graph to EDHREC commander synergy to
-          fetch it.
+          EDHREC data for {name(e.commander)} isn't downloaded yet. Switch the graph to EDHREC commander synergy or
+          EDHREC lift to fetch it.
         </>
       );
   }

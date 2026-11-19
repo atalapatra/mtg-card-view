@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-16_
+_Last updated: 2026-11-19_
 
 ## Done
 - **Python core** (`src/mtgcv/`, see CLAUDE.md)
@@ -48,6 +48,11 @@ _Last updated: 2026-11-16_
 - Resizable left and right sidebars (D-024), with widths remembered per browser.
 - New/Edit collection dialog: "Analyze & save" / "Save" is locked (shows "Analyzing…") while the save runs, and while
   a ManaBox CSV is being converted, so a list can't be imported twice. App.tsx also guards against overlapping saves.
+- **EDHREC lift graph** (D-027): third graph weighting, commander <-> card edges by EDHREC lift, sharing the commander
+  pages (and their download) with EDHREC synergy. Lift also shown in the two-card synergy box. EDHREC cache entries
+  from before lift was stored are re-fetched once.
+- **Graph mode switches** (D-028): `src/mtgcv/features.py` `GRAPH_MODES` turns each graph view on or off in code.
+  Disabled modes are hidden in the UI and rejected by the API; with both EDHREC modes off, nothing contacts EDHREC.
 
 ## Next / ideas
 - Run the release workflow once manually on GitHub (Actions → Build GraphMTG → Run workflow) before the first tag.

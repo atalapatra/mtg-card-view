@@ -32,6 +32,8 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 
 export const api = {
   health: () => req<{ app: string; version: string }>('GET', '/api/health'),
+  /** Enabled features (src/mtgcv/features.py). */
+  config: () => req<{ graph_modes: GraphMode[] }>('GET', '/api/config'),
   listDecks: () => req<DeckSummary[]>('GET', '/api/decks'),
   getDeck: (id: number) => req<DeckDetail>('GET', `/api/decks/${id}`),
   createDeck: (name: string, text: string) => req<DeckDetail>('POST', '/api/decks', { name, text }),
